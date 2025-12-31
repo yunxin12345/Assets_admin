@@ -2,15 +2,15 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>企業資產管理系統 - 進階版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>企業資產管理系統 - Pro (CSV / 搜尋下拉)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
     body { font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; }
 
-    .custom-scroll::-webkit-scrollbar { width: 6px; }
+    .custom-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 
@@ -50,17 +50,41 @@
     }
 
     .asset-table { width: 100%; border-collapse: collapse; }
-    .asset-table th { background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; font-size: 13px; text-align: left; }
-    .asset-table td { border: 1px solid #cbd5e1; padding: 12px; font-size: 14px; }
+    .asset-table th {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      padding: 12px;
+      font-size: 13px;
+      text-align: left;
+    }
+    .asset-table td {
+      border: 1px solid #cbd5e1;
+      padding: 12px;
+      font-size: 14px;
+    }
 
-    .sort-header { cursor: pointer; user-select: none; }
-    .sort-header:hover { background-color: #f1f5f9; }
+    /* Searchable dropdown */
+    .ss-wrap { position: relative; }
+    .ss-panel {
+      position: absolute;
+      z-index: 60;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+      overflow: hidden;
+    }
+    .ss-item:hover { background: #f1f5f9; }
+    .ss-item.active { background: #eef2ff; color: #4338ca; }
   </style>
 </head>
 
 <body class="text-slate-900">
 
-  <!-- 頂部導覽 -->
+  <!-- Top Nav -->
   <nav class="bg-white border-b border-slate-200 sticky top-0 z-40 no-print">
     <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
       <div class="flex items-center gap-6">
@@ -78,7 +102,8 @@
       </div>
 
       <div class="flex gap-3">
-        <button onclick="openGenerateSlipModal()" class="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-100 transition-colors">
+        <button onclick="openPrintModal()"
+                class="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-100 transition-colors">
           <i data-lucide="file-text" class="w-4 h-4"></i> 生成領用單
         </button>
       </div>
@@ -86,29 +111,41 @@
   </nav>
 
   <main class="max-w-7xl mx-auto p-6 no-print">
-    <!-- 資產清冊區域 -->
+
+    <!-- Assets Section -->
     <section id="section-assets" class="space-y-4">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 class="text-2xl font-black">資產清冊</h2>
+        <div class="space-y-2">
+          <h2 class="text-2xl font-black">資產清冊</h2>
+          <div class="flex gap-2 flex-wrap">
+            <button onclick="exportAssetsCSV()" class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2">
+              <i data-lucide="download" class="w-4 h-4"></i> 匯出 CSV
+            </button>
+            <button onclick="triggerImport('assets')" class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2">
+              <i data-lucide="upload" class="w-4 h-4"></i> 匯入 CSV
+            </button>
 
-        <div class="flex flex-wrap gap-2 items-center">
-          <!-- CSV 匯出/匯入 -->
-          <button onclick="exportCSV('assets')" class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-50">
-            <i data-lucide="download" class="w-4 h-4 text-slate-600"></i> 匯出
-          </button>
-          <button onclick="importCSV('assets')" class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-50">
-            <i data-lucide="upload" class="w-4 h-4 text-slate-600"></i> 匯入
-          </button>
-          <span class="text-xs text-slate-400 font-bold">(CSV)</span>
+            <div class="relative">
+              <button onclick="toggleDeptFilterMenu('assets')" class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2">
+                <i data-lucide="building-2" class="w-4 h-4"></i> 部門篩選：<span id="assets-dept-filter-label">全部</span>
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>
+              </button>
+              <div id="assets-dept-filter-menu" class="hidden absolute top-full left-0 mt-2 w-60 bg-white shadow-xl border border-slate-100 rounded-xl p-2 z-50">
+                <!-- filled by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
 
-          <div class="w-px h-8 bg-slate-200 mx-1 hidden md:block"></div>
-
+        <div class="flex gap-2">
           <div class="relative">
             <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
-            <input type="text" id="asset-search" placeholder="搜尋設備名稱或編號..." class="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm w-64 focus:ring-2 focus:ring-indigo-500 outline-none">
+            <input type="text" id="asset-search" placeholder="搜尋設備名稱或編號..."
+                   class="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm w-64 focus:ring-2 focus:ring-indigo-500 outline-none">
           </div>
 
-          <button onclick="showAddAssetModal()" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-black flex items-center gap-2 shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">
+          <button onclick="showAddAssetModal()"
+                  class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-black flex items-center gap-2 shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">
             <i data-lucide="plus" class="w-4 h-4"></i> 新增資產
           </button>
         </div>
@@ -118,22 +155,25 @@
         <table class="w-full text-left">
           <thead class="bg-slate-50 border-b border-slate-200 text-[11px] font-black text-slate-400 uppercase tracking-wider">
             <tr>
-              <th class="p-4">資產編號</th>
+              <th class="p-4 w-[160px]">資產編號</th>
 
-              <th class="p-4 sort-header group" onclick="toggleSort('name')">
-                <div class="flex items-center gap-1">
-                  設備名稱
-                  <span id="sort-icon-name"><i data-lucide="chevrons-up-down" class="w-3 h-3 text-slate-300"></i></span>
+              <th class="p-4">
+                <div class="flex items-center justify-between gap-2">
+                  <button class="flex items-center gap-1 font-black text-slate-500 hover:text-slate-700"
+                          onclick="toggleSort('name')">
+                    設備名稱
+                    <span id="sort-icon-name"><i data-lucide="chevrons-up-down" class="w-3 h-3 text-slate-300"></i></span>
+                  </button>
 
-                  <!-- 篩選（加大下拉） -->
-                  <div class="relative ml-auto">
-                    <button type="button" onclick="event.stopPropagation(); toggleAssetFilterMenu()" class="p-1 hover:bg-slate-200 rounded">
-                      <i data-lucide="filter" class="w-3 h-3 text-slate-400 group-hover:text-indigo-500"></i>
+                  <div class="relative">
+                    <button onclick="event.stopPropagation(); toggleAssignedFilterMenu()"
+                            class="p-2 hover:bg-slate-200 rounded-lg">
+                      <i data-lucide="filter" class="w-4 h-4 text-slate-400 hover:text-indigo-500"></i>
                     </button>
-                    <div id="asset-filter-menu" class="hidden absolute top-full right-0 mt-2 w-44 bg-white shadow-xl border border-slate-100 rounded-xl p-2 z-50 normal-case">
-                      <button onclick="setAssetFilter('all')" class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg">全部</button>
-                      <button onclick="setAssetFilter('assigned')" class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg">已分配</button>
-                      <button onclick="setAssetFilter('unassigned')" class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg">待分配</button>
+                    <div id="assigned-filter-menu" class="hidden absolute top-full right-0 mt-2 w-56 bg-white shadow-xl border border-slate-100 rounded-xl p-2 z-50 normal-case">
+                      <button onclick="setAssignedFilter('all')" class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg">全部</button>
+                      <button onclick="setAssignedFilter('assigned')" class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg">已分配</button>
+                      <button onclick="setAssignedFilter('unassigned')" class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg">待分配</button>
                     </div>
                   </div>
                 </div>
@@ -145,64 +185,65 @@
               <th class="p-4 text-right">操作</th>
             </tr>
           </thead>
+
           <tbody id="asset-list" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
     </section>
 
-    <!-- 員工管理區域 -->
+
+    <!-- Staff Section -->
     <section id="section-staff" class="hidden space-y-4">
+
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 class="text-2xl font-black">員工管理</h2>
+        <div class="space-y-2">
+          <h2 class="text-2xl font-black">員工管理</h2>
 
-        <div class="flex flex-wrap gap-2 items-center justify-end">
-          <!-- CSV 匯出/匯入 -->
-          <button onclick="exportCSV('staff')" class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-50">
-            <i data-lucide="download" class="w-4 h-4 text-slate-600"></i> 匯出
-          </button>
-          <button onclick="importCSV('staff')" class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-50">
-            <i data-lucide="upload" class="w-4 h-4 text-slate-600"></i> 匯入
-          </button>
-          <span class="text-xs text-slate-400 font-bold">(CSV)</span>
+          <div class="flex gap-2 flex-wrap items-center">
+            <button onclick="exportStaffCSV()" class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2">
+              <i data-lucide="download" class="w-4 h-4"></i> 匯出 CSV
+            </button>
+            <button onclick="triggerImport('staff')" class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2">
+              <i data-lucide="upload" class="w-4 h-4"></i> 匯入 CSV
+            </button>
 
-          <div class="w-px h-8 bg-slate-200 mx-1 hidden md:block"></div>
+            <div class="relative">
+              <button onclick="toggleDeptFilterMenu('staff')"
+                      class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2">
+                <i data-lucide="building-2" class="w-4 h-4"></i> 部門篩選：<span id="staff-dept-filter-label">全部</span>
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>
+              </button>
+              <div id="staff-dept-filter-menu" class="hidden absolute top-full left-0 mt-2 w-60 bg-white shadow-xl border border-slate-100 rounded-xl p-2 z-50">
+                <!-- filled by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
 
-          <button onclick="bulkDeleteStaff()" class="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-black flex items-center gap-2 hover:bg-red-100 transition-colors">
+        <div class="flex gap-3 items-center">
+          <button onclick="bulkDeleteStaff()"
+                  class="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-black flex items-center gap-2 hover:bg-red-100 transition-colors">
             <i data-lucide="trash-2" class="w-4 h-4"></i> 批次刪除
           </button>
 
-          <button onclick="showAddStaffModal()" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-black flex items-center gap-2">
+          <button onclick="showAddStaffModal()"
+                  class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-black flex items-center gap-2 shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">
             <i data-lucide="user-plus" class="w-4 h-4"></i> 新增員工
           </button>
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <table class="w-full text-left">
           <thead class="bg-slate-50 border-b border-slate-200 text-[11px] font-black text-slate-400">
             <tr>
-              <th class="p-4 w-10">
-                <input id="staff-check-all" type="checkbox" class="w-4 h-4" onclick="toggleAllStaffCheckbox(this.checked)">
+              <th class="p-4 w-12">
+                <input type="checkbox" id="staff-check-all" class="w-5 h-5 accent-indigo-600" onclick="toggleStaffCheckAll(this.checked)">
               </th>
-              <th class="p-4">員工編號</th>
+              <th class="p-4 w-32">員工編號</th>
               <th class="p-4">姓名</th>
               <th class="p-4">職稱</th>
-
-              <!-- 部門 + 篩選按鈕 -->
-              <th class="p-4">
-                <div class="flex items-center gap-2">
-                  <span>部門</span>
-                  <div class="relative">
-                    <button type="button" onclick="toggleStaffDeptFilterMenu()" class="p-1 hover:bg-slate-200 rounded">
-                      <i data-lucide="filter" class="w-3.5 h-3.5 text-slate-500"></i>
-                    </button>
-                    <div id="staff-dept-filter-menu" class="hidden absolute top-full left-0 mt-2 w-56 bg-white shadow-xl border border-slate-100 rounded-xl p-2 z-50 normal-case">
-                      <!-- 動態塞入 -->
-                    </div>
-                  </div>
-                </div>
-              </th>
-
+              <th class="p-4">部門</th>
               <th class="p-4">到職日期</th>
               <th class="p-4 text-right">管理</th>
             </tr>
@@ -211,22 +252,22 @@
         </table>
       </div>
     </section>
+
   </main>
 
-  <!-- 共用匯入 input（CSV） -->
-  <input id="import-file" type="file" accept=".csv,text/csv" class="hidden"/>
+  <!-- Hidden Import Inputs -->
+  <input id="import-assets" type="file" accept=".csv" class="hidden" onchange="handleImportCSV('assets', this.files?.[0])">
+  <input id="import-staff" type="file" accept=".csv" class="hidden" onchange="handleImportCSV('staff', this.files?.[0])">
 
-  <!-- Modal 容器 -->
+  <!-- Modal -->
   <div id="modal-overlay" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scroll" id="modal-content"></div>
   </div>
 
-  <!-- 列印預覽 -->
+  <!-- Preview -->
   <div id="preview-overlay" class="hidden fixed inset-0 bg-slate-900/90 z-[60] overflow-y-auto no-print">
     <div class="sticky top-0 bg-white border-b p-4 flex justify-between items-center shadow-lg">
-      <button onclick="closePreview()" class="p-2 hover:bg-slate-100 rounded-full">
-        <i data-lucide="x" class="w-6 h-6"></i>
-      </button>
+      <button onclick="closePreview()" class="p-2 hover:bg-slate-100 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
       <div class="flex gap-3">
         <button onclick="window.print()" class="px-8 py-3 bg-indigo-600 text-white rounded-xl font-black flex items-center gap-2">
           <i data-lucide="printer" class="w-5 h-5"></i> 確認列印
@@ -236,35 +277,38 @@
     <div id="preview-render" class="flex justify-center py-10"></div>
   </div>
 
-  <!-- 真實列印區域 -->
   <div id="print-area" class="hidden print-only"></div>
 
   <script>
-    // =========================
-    // LocalStorage Keys
-    // =========================
-    const KEY_ASSETS = "assets_pro_v4";
-    const KEY_STAFF  = "staff_pro_v4";
+    /*****************************
+     * Storage Keys
+     *****************************/
+    const LS_ASSETS = 'assets_pro_v4_csv';
+    const LS_STAFF  = 'staff_pro_v4_csv';
 
-    // =========================
-    // Data Init
-    // =========================
-    let assets = JSON.parse(localStorage.getItem(KEY_ASSETS)) || [];
-    let staff  = JSON.parse(localStorage.getItem(KEY_STAFF))  || [
+    /*****************************
+     * Data Init
+     *****************************/
+    let assets = JSON.parse(localStorage.getItem(LS_ASSETS)) || [];
+    let staff  = JSON.parse(localStorage.getItem(LS_STAFF)) || [
       { id: "EMP001", name: "王大明", title: "工程師", dept: "技術部", joinDate: "2023-01-01" }
     ];
 
+    /*****************************
+     * UI State
+     *****************************/
     let currentSort = { key: null, direction: 'asc' };
-    let currentAssetFilter = "all";
-    let currentStaffDeptFilter = "ALL"; // ALL / deptName
-    let selectedStaffIds = new Set();
+    let assignedFilter = 'all';       // all/assigned/unassigned
+    let assetsDeptFilter = '全部';     // dept name or 全部
+    let staffDeptFilter  = '全部';     // dept name or 全部
+    let selectedStaffIds = new Set(); // bulk delete
 
-    // =========================
-    // Helpers
-    // =========================
-    function saveAll() {
-      localStorage.setItem(KEY_ASSETS, JSON.stringify(assets));
-      localStorage.setItem(KEY_STAFF, JSON.stringify(staff));
+    /*****************************
+     * Save / Helpers
+     *****************************/
+    function save() {
+      localStorage.setItem(LS_ASSETS, JSON.stringify(assets));
+      localStorage.setItem(LS_STAFF, JSON.stringify(staff));
       render();
     }
 
@@ -272,116 +316,139 @@
       try { const url = new URL(str); return url.protocol === "http:" || url.protocol === "https:"; }
       catch (_) { return false; }
     }
-    function openLink(val) { if (isURL(val)) window.open(val, "_blank"); }
+    function openLink(val) { if (isURL(val)) window.open(val, '_blank'); }
+
+    function normalize(str) { return (str ?? '').toString().trim(); }
 
     function getStaffByName(name) {
-      return staff.find(s => s.name === name);
+      return staff.find(s => s.name === name) || null;
     }
-    function uniqueDepts() {
-      const set = new Set(staff.map(s => (s.dept || "").trim()).filter(Boolean));
-      return Array.from(set).sort((a,b)=>a.localeCompare(b,'zh-Hant'));
+    function getDeptSetFromStaff() {
+      return new Set(staff.map(s => normalize(s.dept)).filter(Boolean));
+    }
+    function getDeptSetFromAssets() {
+      return new Set(assets.map(a => normalize(a.dept)).filter(Boolean));
     }
 
-    // =========================
-    // Tabs
-    // =========================
+    /*****************************
+     * Tabs
+     *****************************/
     document.getElementById('tab-assets').onclick = () => switchTab('assets');
     document.getElementById('tab-staff').onclick  = () => switchTab('staff');
+
     function switchTab(type) {
       const isAssets = type === 'assets';
       document.getElementById('section-assets').classList.toggle('hidden', !isAssets);
       document.getElementById('section-staff').classList.toggle('hidden', isAssets);
+
       document.getElementById('tab-assets').className = isAssets
-        ? "px-5 py-1.5 rounded-lg text-sm font-bold transition-all bg-white shadow-sm text-indigo-600"
-        : "px-5 py-1.5 rounded-lg text-sm font-bold transition-all text-slate-500 hover:text-slate-700";
+        ? "px-5 py-1.5 rounded-lg text-sm font-bold bg-white shadow-sm text-indigo-600"
+        : "px-5 py-1.5 rounded-lg text-sm font-bold text-slate-500 hover:text-slate-700";
+
       document.getElementById('tab-staff').className = !isAssets
-        ? "px-5 py-1.5 rounded-lg text-sm font-bold transition-all bg-white shadow-sm text-indigo-600"
-        : "px-5 py-1.5 rounded-lg text-sm font-bold transition-all text-slate-500 hover:text-slate-700";
+        ? "px-5 py-1.5 rounded-lg text-sm font-bold bg-white shadow-sm text-indigo-600"
+        : "px-5 py-1.5 rounded-lg text-sm font-bold text-slate-500 hover:text-slate-700";
     }
 
     document.getElementById('asset-search').oninput = render;
 
-    // =========================
-    // Assets Filters / Sort
-    // =========================
+    /*****************************
+     * Filters & Sorting
+     *****************************/
     function toggleSort(key) {
-      if (currentSort.key === key) currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-      else { currentSort.key = key; currentSort.direction = 'asc'; }
+      if (currentSort.key === key) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.key = key;
+        currentSort.direction = 'asc';
+      }
       render();
     }
 
-    function toggleAssetFilterMenu() {
-      const menu = document.getElementById('asset-filter-menu');
+    function toggleAssignedFilterMenu() {
+      document.getElementById('assigned-filter-menu').classList.toggle('hidden');
+    }
+    function setAssignedFilter(v) {
+      assignedFilter = v;
+      document.getElementById('assigned-filter-menu').classList.add('hidden');
+      render();
+    }
+
+    function toggleDeptFilterMenu(kind) {
+      const menuId = (kind === 'staff') ? 'staff-dept-filter-menu' : 'assets-dept-filter-menu';
+      const menu = document.getElementById(menuId);
       menu.classList.toggle('hidden');
     }
-    function setAssetFilter(type) {
-      currentAssetFilter = type;
-      document.getElementById('asset-filter-menu').classList.add('hidden');
+
+    function setDeptFilter(kind, dept) {
+      if (kind === 'staff') {
+        staffDeptFilter = dept;
+        document.getElementById('staff-dept-filter-label').textContent = dept;
+        document.getElementById('staff-dept-filter-menu').classList.add('hidden');
+      } else {
+        assetsDeptFilter = dept;
+        document.getElementById('assets-dept-filter-label').textContent = dept;
+        document.getElementById('assets-dept-filter-menu').classList.add('hidden');
+      }
       render();
     }
 
-    // =========================
-    // Staff Dept Filter
-    // =========================
-    function toggleStaffDeptFilterMenu() {
-      const menu = document.getElementById("staff-dept-filter-menu");
-      const isHidden = menu.classList.contains("hidden");
-      if (isHidden) buildStaffDeptFilterMenu();
-      menu.classList.toggle("hidden");
-    }
-
-    function buildStaffDeptFilterMenu() {
-      const menu = document.getElementById("staff-dept-filter-menu");
-      const depts = uniqueDepts();
-      menu.innerHTML = `
-        <button onclick="setStaffDeptFilter('ALL')" class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg ${currentStaffDeptFilter==='ALL'?'bg-slate-50':''}">
-          全部部門
+    function buildDeptMenus() {
+      // staff dept menu
+      const staffMenu = document.getElementById('staff-dept-filter-menu');
+      const staffDepts = ['全部', ...Array.from(getDeptSetFromStaff()).sort((a,b)=>a.localeCompare(b,'zh-Hant'))];
+      staffMenu.innerHTML = staffDepts.map(d => `
+        <button onclick="setDeptFilter('staff','${escapeHtmlAttr(d)}')"
+                class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg">
+          ${d}
         </button>
-        <div class="my-2 border-t border-slate-100"></div>
-        ${depts.length ? depts.map(d => `
-          <button onclick="setStaffDeptFilter('${escapeHtml(d)}')" class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg ${currentStaffDeptFilter===d?'bg-slate-50':''}">
-            ${escapeHtml(d)}
-          </button>
-        `).join("") : `<p class="text-xs text-slate-400 px-3 py-2">尚無部門資料</p>`}
-      `;
-      lucide.createIcons();
+      `).join('');
+
+      // assets dept menu
+      const assetsMenu = document.getElementById('assets-dept-filter-menu');
+      const assetsDepts = ['全部', ...Array.from(new Set([
+        ...Array.from(getDeptSetFromAssets()),
+        ...Array.from(getDeptSetFromStaff())
+      ])).sort((a,b)=>a.localeCompare(b,'zh-Hant'))];
+
+      assetsMenu.innerHTML = assetsDepts.map(d => `
+        <button onclick="setDeptFilter('assets','${escapeHtmlAttr(d)}')"
+                class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg">
+          ${d}
+        </button>
+      `).join('');
     }
 
-    function setStaffDeptFilter(dept) {
-      currentStaffDeptFilter = dept;
-      document.getElementById("staff-dept-filter-menu").classList.add("hidden");
-      render();
-    }
-
-    function escapeHtml(s) {
-      return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
-    }
-
-    // =========================
-    // Render
-    // =========================
+    /*****************************
+     * Render
+     *****************************/
     function render() {
-      // ------- Assets render -------
+      buildDeptMenus();
+
+      // Assets
       const searchTerm = document.getElementById('asset-search').value.toLowerCase();
-
       let filteredAssets = assets.filter(a => {
-        const matchSearch =
-          (a.name || "").toLowerCase().includes(searchTerm) ||
-          (a.id || "").toLowerCase().includes(searchTerm);
-
+        const matchSearch = (a.name||'').toLowerCase().includes(searchTerm) || (a.id||'').toLowerCase().includes(searchTerm);
         if (!matchSearch) return false;
-        if (currentAssetFilter === 'assigned') return !!a.user;
-        if (currentAssetFilter === 'unassigned') return !a.user;
+
+        if (assignedFilter === 'assigned' && !a.user) return false;
+        if (assignedFilter === 'unassigned' && a.user) return false;
+
+        if (assetsDeptFilter !== '全部') {
+          const dept = normalize(a.dept);
+          if (dept !== assetsDeptFilter) return false;
+        }
+
         return true;
       });
 
       if (currentSort.key) {
-        filteredAssets.sort((a, b) => {
-          const valA = (a[currentSort.key] || '');
-          const valB = (b[currentSort.key] || '');
+        filteredAssets.sort((a,b) => {
+          const va = (a[currentSort.key] || '').toString();
+          const vb = (b[currentSort.key] || '').toString();
           return currentSort.direction === 'asc'
-            ? valA.localeCompare(valB, 'zh-Hant')
-            : valB.localeCompare(valA, 'zh-Hant');
+            ? va.localeCompare(vb, 'zh-Hant')
+            : vb.localeCompare(va, 'zh-Hant');
         });
       }
 
@@ -396,43 +463,40 @@
 
       const assetList = document.getElementById('asset-list');
       assetList.innerHTML = filteredAssets.map(a => `
-        <tr class="hover:bg-slate-50 cursor-pointer transition-colors" onclick="showAssetDetail('${escapeHtml(a.id)}')">
+        <tr class="hover:bg-slate-50 cursor-pointer transition-colors" onclick="showAssetDetail('${escapeHtmlAttr(a.id)}')">
           <td class="p-4 font-mono text-xs font-bold text-indigo-600">${escapeHtml(a.id)}</td>
           <td class="p-4 font-bold text-slate-700">${escapeHtml(a.name)}</td>
           <td class="p-4">${a.user ? escapeHtml(a.user) : '<span class="text-slate-300">未分配</span>'}</td>
-          <td class="p-4 text-slate-500 text-sm">${a.dept ? escapeHtml(a.dept) : '--'}</td>
-          <td class="p-4 text-slate-500 text-sm truncate max-w-[220px]">${escapeHtml(a.spec || '')}</td>
+          <td class="p-4 text-slate-600 text-sm">${a.dept ? escapeHtml(a.dept) : '<span class="text-slate-300">--</span>'}</td>
+          <td class="p-4 text-slate-500 text-sm truncate max-w-[240px]">${escapeHtml(a.spec || '')}</td>
           <td class="p-4 text-right">
-            <button onclick="event.stopPropagation(); openGenerateSlipModal('${escapeHtml(a.user || '')}')" class="text-indigo-600 hover:text-indigo-800 text-sm font-bold bg-indigo-50 px-3 py-1 rounded-lg">
+            <button onclick="event.stopPropagation(); generatePrintByUser('${escapeHtmlAttr(a.user)}')"
+                    class="text-indigo-600 hover:text-indigo-800 text-sm font-bold bg-indigo-50 px-3 py-1 rounded-lg">
               領用單
             </button>
           </td>
         </tr>
       `).join('');
 
-      // ------- Staff render -------
-      let filteredStaff = [...staff];
-      if (currentStaffDeptFilter !== "ALL") {
-        filteredStaff = filteredStaff.filter(s => (s.dept || "") === currentStaffDeptFilter);
-      }
-
-      // 清掉 check-all 狀態（避免不同篩選造成錯覺）
-      const checkAll = document.getElementById("staff-check-all");
-      if (checkAll) checkAll.checked = false;
-
+      // Staff
       const staffList = document.getElementById('staff-list');
-      staffList.innerHTML = filteredStaff.map(s => `
-        <tr class="hover:bg-slate-50 cursor-pointer" onclick="showStaffDetail('${escapeHtml(s.id)}')">
-          <td class="p-4 w-10" onclick="event.stopPropagation();">
-            <input type="checkbox" class="w-4 h-4" ${selectedStaffIds.has(s.id) ? "checked" : ""} onclick="toggleStaffSelected('${escapeHtml(s.id)}', this.checked)">
+      const staffFiltered = staff.filter(s => (staffDeptFilter === '全部') ? true : (normalize(s.dept) === staffDeptFilter));
+
+      staffList.innerHTML = staffFiltered.map(s => `
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="p-4">
+            <input type="checkbox" class="w-5 h-5 accent-indigo-600"
+                   ${selectedStaffIds.has(s.id) ? 'checked' : ''}
+                   onclick="toggleStaffSelect('${escapeHtmlAttr(s.id)}', this.checked)">
           </td>
-          <td class="p-4 font-mono text-xs font-bold">${escapeHtml(s.id)}</td>
+          <td class="p-4 font-mono text-xs">${escapeHtml(s.id)}</td>
           <td class="p-4 font-black">${escapeHtml(s.name)}</td>
-          <td class="p-4 text-slate-700 font-bold">${escapeHtml(s.title || '')}</td>
-          <td class="p-4">${escapeHtml(s.dept || '')}</td>
+          <td class="p-4 text-slate-700">${escapeHtml(s.title || '')}</td>
+          <td class="p-4 text-slate-700">${escapeHtml(s.dept || '')}</td>
           <td class="p-4 text-slate-500">${escapeHtml(s.joinDate || '')}</td>
-          <td class="p-4 text-right" onclick="event.stopPropagation();">
-            <button onclick="showStaffDetail('${escapeHtml(s.id)}')" class="text-slate-400 hover:text-indigo-600">
+          <td class="p-4 text-right">
+            <button onclick="showStaffDetail('${escapeHtmlAttr(s.id)}')"
+                    class="text-slate-500 hover:text-indigo-600 p-2 rounded-lg hover:bg-slate-100">
               <i data-lucide="edit-3" class="w-4 h-4"></i>
             </button>
           </td>
@@ -442,74 +506,69 @@
       lucide.createIcons();
     }
 
-    // =========================
-    // Staff bulk select / delete
-    // =========================
-    function toggleStaffSelected(id, checked) {
+    /*****************************
+     * Bulk Select / Delete Staff
+     *****************************/
+    function toggleStaffSelect(id, checked) {
       if (checked) selectedStaffIds.add(id);
       else selectedStaffIds.delete(id);
+      syncStaffCheckAll();
     }
-    function toggleAllStaffCheckbox(checked) {
-      const visible = [...staff].filter(s => currentStaffDeptFilter === "ALL" ? true : (s.dept||"") === currentStaffDeptFilter);
-      visible.forEach(s => checked ? selectedStaffIds.add(s.id) : selectedStaffIds.delete(s.id));
+
+    function toggleStaffCheckAll(checked) {
+      const staffFiltered = staff.filter(s => (staffDeptFilter === '全部') ? true : (normalize(s.dept) === staffDeptFilter));
+      if (checked) staffFiltered.forEach(s => selectedStaffIds.add(s.id));
+      else staffFiltered.forEach(s => selectedStaffIds.delete(s.id));
       render();
+      syncStaffCheckAll();
     }
+
+    function syncStaffCheckAll() {
+      const staffFiltered = staff.filter(s => (staffDeptFilter === '全部') ? true : (normalize(s.dept) === staffDeptFilter));
+      const allChecked = staffFiltered.length > 0 && staffFiltered.every(s => selectedStaffIds.has(s.id));
+      document.getElementById('staff-check-all').checked = allChecked;
+    }
+
     function bulkDeleteStaff() {
-      if (!selectedStaffIds.size) return alert("請先勾選要刪除的員工。");
-      if (!confirm(`確定刪除已勾選的 ${selectedStaffIds.size} 位員工？\n其名下資產將變為未分配。`)) return;
+      if (selectedStaffIds.size === 0) return alert('請先勾選要刪除的員工');
+      if (!confirm(`確定刪除 ${selectedStaffIds.size} 位員工？其名下資產將改為未分配。`)) return;
 
-      const toDelete = new Set(selectedStaffIds);
-      const deletedNames = staff.filter(s => toDelete.has(s.id)).map(s => s.name);
+      const idsToDelete = new Set(selectedStaffIds);
+      const namesToDelete = new Set(staff.filter(s => idsToDelete.has(s.id)).map(s => s.name));
 
-      staff = staff.filter(s => !toDelete.has(s.id));
+      staff = staff.filter(s => !idsToDelete.has(s.id));
 
-      // 資產解除分配（若使用者姓名在刪除名單內）
-      assets = assets.map(a => {
-        if (deletedNames.includes(a.user)) return { ...a, user: "", dept: "" };
-        return a;
+      assets.forEach(a => {
+        if (namesToDelete.has(a.user)) {
+          a.user = '';
+          a.dept = '';
+        }
       });
 
       selectedStaffIds.clear();
-      saveAll();
+      save();
+      document.getElementById('staff-check-all').checked = false;
     }
 
-    // =========================
-    // Asset ID generator
-    // =========================
+    /*****************************
+     * Asset ID helper
+     *****************************/
     function generateAssetID(name) {
       const isApple = /apple|mac|iphone|ipad|ipod/i.test(name);
-      if (isApple) return "";
-      const prefix = (name || "").substring(0, 2).toUpperCase();
+      if (isApple) return ""; // Apple -> manual
+      const prefix = (name || 'AS').substring(0, 2).toUpperCase().replace(/[^A-Z0-9]/g,'A');
       const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
       return `${prefix}-${dateStr}-${random}`;
     }
 
-    // =========================
-    // Modal helpers (all have close X)
-    // =========================
-    function openModal(innerHTML) {
-      document.getElementById('modal-content').innerHTML = innerHTML;
-      document.getElementById('modal-overlay').classList.remove('hidden');
-      lucide.createIcons();
-    }
-    function closeModal() {
-      document.getElementById('modal-overlay').classList.add('hidden');
-      // 關掉篩選選單
-      const aMenu = document.getElementById('asset-filter-menu');
-      if (aMenu) aMenu.classList.add('hidden');
-      const sMenu = document.getElementById('staff-dept-filter-menu');
-      if (sMenu) sMenu.classList.add('hidden');
-    }
-    function closePreview() { document.getElementById('preview-overlay').classList.add('hidden'); }
-
-    // =========================
-    // Assets CRUD
-    // =========================
+    /*****************************
+     * Modals: Asset
+     *****************************/
     function showAddAssetModal() {
       openModal(`
         <div class="p-8">
-          <div class="flex items-center justify-between mb-6">
+          <div class="flex justify-between items-center mb-6">
             <h2 class="text-2xl font-black">新增資產設備</h2>
             <button onclick="closeModal()" class="p-2 hover:bg-slate-100 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
           </div>
@@ -517,12 +576,15 @@
           <form onsubmit="handleAddAsset(event)" class="space-y-4">
             <div>
               <label class="text-sm font-bold mb-1 block">設備名稱</label>
-              <input required name="name" id="new-asset-name" oninput="handleIDPreview(this.value)" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-500">
+              <input required name="name" id="new-asset-name" oninput="handleIDPreview(this.value)"
+                     class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-500">
             </div>
 
             <div id="id-container">
               <label class="text-sm font-bold mb-1 block">資產編號</label>
-              <input required name="id" id="new-asset-id" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-500">
+              <input required name="id" id="new-asset-id"
+                     class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-500">
+              <p class="text-[11px] text-slate-400 mt-2">Apple 類型請手動輸入；非 Apple 會自動帶入建議編號</p>
             </div>
 
             <div>
@@ -544,19 +606,13 @@
                 <input type="number" name="price" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
               </div>
 
-              <!-- 保管人：員工姓名 -->
               <div>
                 <label class="text-sm font-bold mb-1 block">保管人（員工）</label>
-                <select name="user" id="new-asset-user" onchange="syncDeptByUser('new-asset-user','new-asset-dept')" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <select name="user" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
                   <option value="">-- 未分配 --</option>
-                  ${staff.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}（${escapeHtml(s.id)} / ${escapeHtml(s.dept||'')} / ${escapeHtml(s.title||'')}）</option>`).join('')}
+                  ${staff.map(s => `<option value="${escapeHtmlAttr(s.name)}">${escapeHtml(s.name)}</option>`).join('')}
                 </select>
-              </div>
-
-              <!-- 部門：連動帶出 -->
-              <div class="col-span-2">
-                <label class="text-sm font-bold mb-1 block">部門（選擇保管人自動帶出）</label>
-                <input name="dept" id="new-asset-dept" readonly class="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-500" placeholder="--">
+                <p class="text-[11px] text-slate-400 mt-2">選擇員工後會自動帶出部門（儲存時處理）</p>
               </div>
             </div>
 
@@ -571,9 +627,11 @@
               </div>
             </div>
 
-            <div class="flex gap-3 pt-6">
-              <button type="button" onclick="closeModal()" class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold">取消</button>
-              <button type="submit" class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100">確認新增</button>
+            <div class="flex gap-3 pt-4">
+              <button type="button" onclick="closeModal()"
+                      class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold">取消</button>
+              <button type="submit"
+                      class="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100">確認新增</button>
             </div>
           </form>
         </div>
@@ -593,41 +651,31 @@
       }
     }
 
-    function syncDeptByUser(userSelectId, deptInputId) {
-      const sel = document.getElementById(userSelectId);
-      const dept = document.getElementById(deptInputId);
-      const name = sel?.value || "";
-      if (!name) { dept.value = ""; return; }
-      const st = getStaffByName(name);
-      dept.value = st ? (st.dept || "") : "";
-    }
-
     function handleAddAsset(e) {
       e.preventDefault();
       const fd = new FormData(e.target);
-      const id = fd.get('id');
-
+      const id = normalize(fd.get('id'));
       if (assets.some(a => a.id === id)) return alert('資產編號重複！');
 
-      const userName = fd.get('user') || "";
-      const st = getStaffByName(userName);
+      const userName = normalize(fd.get('user'));
+      const staffObj = userName ? getStaffByName(userName) : null;
 
       assets.push({
-        id: id,
-        name: fd.get('name'),
-        spec: fd.get('spec') || "",
-        buyDate: fd.get('buyDate') || "",
-        warranty: fd.get('warranty') || "",
-        price: fd.get('price') || "",
+        id,
+        name: normalize(fd.get('name')),
+        spec: normalize(fd.get('spec')),
+        buyDate: normalize(fd.get('buyDate')),
+        warranty: normalize(fd.get('warranty')),
+        price: normalize(fd.get('price')),
         user: userName,
-        dept: st ? (st.dept || "") : (fd.get('dept') || ""),
-        receipt: fd.get('receipt') || "",
-        warrantyDoc: fd.get('warrantyDoc') || "",
+        dept: staffObj ? staffObj.dept : '',
+        receipt: normalize(fd.get('receipt')),
+        warrantyDoc: normalize(fd.get('warrantyDoc')),
         history: [],
         repairs: []
       });
 
-      saveAll();
+      save();
       closeModal();
     }
 
@@ -637,80 +685,129 @@
 
       openModal(`
         <div class="p-8">
-          <div class="flex items-center justify-between mb-6">
+          <div class="flex justify-between items-center mb-8">
             <h2 class="text-2xl font-black">資產詳細資訊 / 編輯</h2>
             <button onclick="closeModal()" class="p-2 hover:bg-slate-100 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
           </div>
 
-          <form onsubmit="handleUpdateAsset(event, '${escapeHtml(id)}')" class="space-y-6">
+          <form onsubmit="handleUpdateAsset(event, '${escapeHtmlAttr(id)}')" class="space-y-6">
             <div class="grid grid-cols-2 gap-4">
               <div class="col-span-2 md:col-span-1">
                 <label class="text-xs font-bold text-slate-400 mb-1 block">設備名稱</label>
-                <input name="name" value="${escapeHtml(a.name)}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold">
+                <input name="name" value="${escapeHtmlAttr(a.name)}"
+                       class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold">
               </div>
               <div class="col-span-2 md:col-span-1">
                 <label class="text-xs font-bold text-slate-400 mb-1 block">資產編號 (唯讀)</label>
-                <input disabled value="${escapeHtml(a.id)}" class="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl font-mono text-indigo-600">
+                <input disabled value="${escapeHtmlAttr(a.id)}"
+                       class="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl font-mono text-indigo-600">
               </div>
             </div>
 
             <div>
               <label class="text-xs font-bold text-slate-400 mb-1 block">規格描述</label>
-              <input name="spec" value="${escapeHtml(a.spec||'')}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <input name="spec" value="${escapeHtmlAttr(a.spec || '')}"
+                     class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
             </div>
 
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="text-xs font-bold text-slate-400 mb-1 block">保管人（員工姓名）</label>
-                <select name="user" id="edit-asset-user" onchange="syncDeptByUser('edit-asset-user','edit-asset-dept')" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <label class="text-xs font-bold text-slate-400 mb-1 block">保管人（員工）</label>
+                <select name="user" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
                   <option value="">-- 未分配 --</option>
-                  ${staff.map(s => `<option value="${escapeHtml(s.name)}" ${a.user===s.name?'selected':''}>${escapeHtml(s.name)}（${escapeHtml(s.id)} / ${escapeHtml(s.dept||'')} / ${escapeHtml(s.title||'')}）</option>`).join('')}
+                  ${staff.map(s => `<option value="${escapeHtmlAttr(s.name)}" ${a.user === s.name ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}
                 </select>
               </div>
-
               <div>
-                <label class="text-xs font-bold text-slate-400 mb-1 block">部門（自動帶出）</label>
-                <input name="dept" id="edit-asset-dept" readonly value="${escapeHtml(a.dept||'')}" class="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-500">
+                <label class="text-xs font-bold text-slate-400 mb-1 block">部門（自動帶出，唯讀）</label>
+                <input disabled value="${escapeHtmlAttr(a.dept || '')}"
+                       class="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl">
               </div>
 
               <div>
                 <label class="text-xs font-bold text-slate-400 mb-1 block">購買日期</label>
-                <input type="date" name="buyDate" value="${escapeHtml(a.buyDate||'')}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
-              </div>
-              <div>
-                <label class="text-xs font-bold text-slate-400 mb-1 block">購買金額</label>
-                <input type="number" name="price" value="${escapeHtml(a.price||'')}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <input type="date" name="buyDate" value="${escapeHtmlAttr(a.buyDate || '')}"
+                       class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
               </div>
               <div>
                 <label class="text-xs font-bold text-slate-400 mb-1 block">保固期至</label>
-                <input type="date" name="warranty" value="${escapeHtml(a.warranty||'')}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <input type="date" name="warranty" value="${escapeHtmlAttr(a.warranty || '')}"
+                       class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
               </div>
+
+              <div>
+                <label class="text-xs font-bold text-slate-400 mb-1 block">購買金額</label>
+                <input type="number" name="price" value="${escapeHtmlAttr(a.price || '')}"
+                       class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              </div>
+              <div></div>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <div class="flex justify-between items-center mb-1">
                   <label class="text-xs font-bold text-slate-400">收據明細 / 雲端連結</label>
-                  ${isURL(a.receipt) ? `<button type="button" onclick="openLink('${escapeHtml(a.receipt)}')" class="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md flex items-center gap-1">開啟連結 <i data-lucide="external-link" class="w-2.5 h-2.5"></i></button>` : ''}
+                  ${isURL(a.receipt) ? `<button type="button" onclick="openLink('${escapeHtmlAttr(a.receipt)}')" class="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md flex items-center gap-1">開啟連結 <i data-lucide="external-link" class="w-2.5 h-2.5"></i></button>` : ''}
                 </div>
-                <textarea name="receipt" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl h-20 text-sm" placeholder="請輸入收據資訊或網址...">${escapeHtml(a.receipt || '')}</textarea>
+                <textarea name="receipt" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl h-20 text-sm"
+                          placeholder="請輸入收據資訊或網址...">${escapeHtml(a.receipt || '')}</textarea>
               </div>
+
               <div>
                 <div class="flex justify-between items-center mb-1">
                   <label class="text-xs font-bold text-slate-400">保固書說明 / 雲端連結</label>
-                  ${isURL(a.warrantyDoc) ? `<button type="button" onclick="openLink('${escapeHtml(a.warrantyDoc)}')" class="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md flex items-center gap-1">開啟連結 <i data-lucide="external-link" class="w-2.5 h-2.5"></i></button>` : ''}
+                  ${isURL(a.warrantyDoc) ? `<button type="button" onclick="openLink('${escapeHtmlAttr(a.warrantyDoc)}')" class="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md flex items-center gap-1">開啟連結 <i data-lucide="external-link" class="w-2.5 h-2.5"></i></button>` : ''}
                 </div>
-                <textarea name="warrantyDoc" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl h-20 text-sm" placeholder="請輸入保固資訊或網址...">${escapeHtml(a.warrantyDoc || '')}</textarea>
+                <textarea name="warrantyDoc" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl h-20 text-sm"
+                          placeholder="請輸入保固資訊或網址...">${escapeHtml(a.warrantyDoc || '')}</textarea>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-8 mt-6 border-t pt-6">
+              <div class="space-y-3">
+                <div class="flex items-center gap-2 text-indigo-600">
+                  <i data-lucide="history" class="w-4 h-4"></i>
+                  <span class="text-sm font-bold">歷史領用紀錄</span>
+                </div>
+                <div class="max-h-32 overflow-y-auto bg-slate-50 rounded-xl p-3 text-xs space-y-2 border border-slate-100 custom-scroll">
+                  ${(a.history && a.history.length) ? a.history.map(h => `
+                    <div class="flex justify-between text-slate-500 border-b border-slate-200 pb-1">
+                      <span class="font-bold">${escapeHtml(h.name)}</span>
+                      <span>${escapeHtml(h.date)}</span>
+                    </div>
+                  `).join('') : '<p class="text-slate-300 italic">尚無前領用者資料</p>'}
+                </div>
+              </div>
+
+              <div class="space-y-3">
+                <div class="flex items-center gap-2 text-amber-600">
+                  <i data-lucide="wrench" class="w-4 h-4"></i>
+                  <span class="text-sm font-bold">維修紀錄</span>
+                </div>
+                <div class="max-h-32 overflow-y-auto bg-slate-50 rounded-xl p-3 text-xs space-y-2 border border-slate-100 custom-scroll">
+                  ${(a.repairs && a.repairs.length) ? a.repairs.map(r => `
+                    <div class="text-slate-600 border-b border-slate-200 pb-1">
+                      <div class="flex justify-between font-bold"><span>${escapeHtml(r.date)}</span><span>${escapeHtml(r.status)}</span></div>
+                      <div class="text-slate-400 mt-1">${escapeHtml(r.desc)}</div>
+                    </div>
+                  `).join('') : '<p class="text-slate-300 italic">尚無維修紀錄</p>'}
+                </div>
+                <button type="button" onclick="addRepairRecord('${escapeHtmlAttr(id)}')"
+                        class="text-xs text-amber-700 font-bold hover:underline">+ 新增維修紀錄</button>
               </div>
             </div>
 
             <div class="flex gap-3 pt-6">
-              <button type="button" onclick="deleteAsset('${escapeHtml(id)}')" class="px-6 py-3 border border-red-100 text-red-500 rounded-xl font-bold hover:bg-red-50">刪除資產</button>
-              <button type="submit" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100">儲存變更</button>
+              <button type="button" onclick="deleteAsset('${escapeHtmlAttr(id)}')"
+                      class="px-6 py-3 border border-red-100 text-red-500 rounded-xl font-bold hover:bg-red-50">刪除資產</button>
+              <button type="submit"
+                      class="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100">儲存變更</button>
             </div>
           </form>
         </div>
       `);
+
+      lucide.createIcons();
     }
 
     function handleUpdateAsset(e, id) {
@@ -720,47 +817,60 @@
       if (index < 0) return;
 
       const asset = assets[index];
-      const newUser = fd.get('user') || "";
+      const newUser = normalize(fd.get('user'));
+      const staffObj = newUser ? getStaffByName(newUser) : null;
 
-      // 變更使用者 -> 記錄歷史
       if (newUser !== asset.user && asset.user) {
         if (!asset.history) asset.history = [];
         asset.history.unshift({ name: asset.user, date: new Date().toLocaleDateString() });
       }
 
-      const st = getStaffByName(newUser);
-
       assets[index] = {
         ...asset,
-        name: fd.get('name'),
-        spec: fd.get('spec'),
+        name: normalize(fd.get('name')),
+        spec: normalize(fd.get('spec')),
         user: newUser,
-        dept: st ? (st.dept || "") : (fd.get('dept') || ""),
-        buyDate: fd.get('buyDate'),
-        price: fd.get('price'),
-        warranty: fd.get('warranty'),
-        receipt: fd.get('receipt'),
-        warrantyDoc: fd.get('warrantyDoc')
+        dept: staffObj ? staffObj.dept : '',
+        buyDate: normalize(fd.get('buyDate')),
+        price: normalize(fd.get('price')),
+        warranty: normalize(fd.get('warranty')),
+        receipt: normalize(fd.get('receipt')),
+        warrantyDoc: normalize(fd.get('warrantyDoc'))
       };
 
-      saveAll();
+      save();
       closeModal();
+    }
+
+    function addRepairRecord(id) {
+      const desc = prompt("請輸入維修內容：");
+      if (!desc) return;
+      const index = assets.findIndex(x => x.id === id);
+      if (index < 0) return;
+      if (!assets[index].repairs) assets[index].repairs = [];
+      assets[index].repairs.unshift({
+        date: new Date().toLocaleDateString(),
+        desc: desc,
+        status: "已完成"
+      });
+      save();
+      showAssetDetail(id);
     }
 
     function deleteAsset(id) {
-      if(!confirm('確定刪除此資產？')) return;
+      if (!confirm('確定刪除此資產？')) return;
       assets = assets.filter(a => a.id !== id);
-      saveAll();
+      save();
       closeModal();
     }
 
-    // =========================
-    // Staff CRUD (add title field)
-    // =========================
+    /*****************************
+     * Modals: Staff
+     *****************************/
     function showAddStaffModal() {
       openModal(`
         <div class="p-8">
-          <div class="flex items-center justify-between mb-6">
+          <div class="flex justify-between items-center mb-6">
             <h2 class="text-2xl font-black">新增員工</h2>
             <button onclick="closeModal()" class="p-2 hover:bg-slate-100 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
           </div>
@@ -770,26 +880,32 @@
               <label class="text-sm font-bold mb-1 block">員工編號</label>
               <input required name="id" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
             </div>
+
             <div>
               <label class="text-sm font-bold mb-1 block">姓名</label>
               <input required name="name" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
             </div>
+
             <div>
               <label class="text-sm font-bold mb-1 block">職稱</label>
-              <input name="title" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" placeholder="例：工程師 / 行政 / PM">
+              <input name="title" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" placeholder="例如：Senior Engineer / Admin / Manager...">
             </div>
+
             <div>
               <label class="text-sm font-bold mb-1 block">部門</label>
               <input required name="dept" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
             </div>
+
             <div>
               <label class="text-sm font-bold mb-1 block">到職日期</label>
               <input type="date" required name="joinDate" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
             </div>
 
             <div class="flex gap-3 pt-6">
-              <button type="button" onclick="closeModal()" class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold">取消</button>
-              <button type="submit" class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">確認新增</button>
+              <button type="button" onclick="closeModal()"
+                      class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold">取消</button>
+              <button type="submit"
+                      class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">確認新增</button>
             </div>
           </form>
         </div>
@@ -799,20 +915,18 @@
     function handleAddStaff(e) {
       e.preventDefault();
       const fd = new FormData(e.target);
-      const id = fd.get("id");
-
-      if (staff.some(s => s.id === id)) return alert("員工編號重複！");
+      const id = normalize(fd.get('id'));
+      if (staff.some(s => s.id === id)) return alert('員工編號重複！');
 
       staff.push({
-        id: fd.get('id'),
-        name: fd.get('name'),
-        title: fd.get('title') || "",
-        dept: fd.get('dept'),
-        joinDate: fd.get('joinDate')
+        id,
+        name: normalize(fd.get('name')),
+        title: normalize(fd.get('title')),
+        dept: normalize(fd.get('dept')),
+        joinDate: normalize(fd.get('joinDate'))
       });
 
-      // 同步：若資產 user 對應到此姓名（通常不會是新增時）可忽略
-      saveAll();
+      save();
       closeModal();
     }
 
@@ -822,36 +936,42 @@
 
       openModal(`
         <div class="p-8">
-          <div class="flex items-center justify-between mb-6">
+          <div class="flex justify-between items-center mb-6">
             <h2 class="text-2xl font-black">編輯員工資料</h2>
             <button onclick="closeModal()" class="p-2 hover:bg-slate-100 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
           </div>
 
-          <form onsubmit="handleUpdateStaff(event, '${escapeHtml(id)}')" class="space-y-4">
+          <form onsubmit="handleUpdateStaff(event, '${escapeHtmlAttr(id)}')" class="space-y-4">
             <div>
               <label class="text-sm font-bold mb-1 block">員工編號</label>
-              <input required name="id" value="${escapeHtml(s.id)}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
-            </div>
-            <div>
-              <label class="text-sm font-bold mb-1 block">姓名</label>
-              <input required name="name" value="${escapeHtml(s.name)}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
-            </div>
-            <div>
-              <label class="text-sm font-bold mb-1 block">職稱</label>
-              <input name="title" value="${escapeHtml(s.title||'')}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
-            </div>
-            <div>
-              <label class="text-sm font-bold mb-1 block">部門</label>
-              <input required name="dept" value="${escapeHtml(s.dept||'')}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
-            </div>
-            <div>
-              <label class="text-sm font-bold mb-1 block">到職日期</label>
-              <input type="date" required name="joinDate" value="${escapeHtml(s.joinDate||'')}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <input required name="id" value="${escapeHtmlAttr(s.id)}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
             </div>
 
-            <div class="flex gap-3 pt-6">
-              <button type="button" onclick="deleteStaff('${escapeHtml(id)}')" class="px-6 py-4 border border-red-100 text-red-500 rounded-2xl font-bold">刪除</button>
-              <button type="submit" class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">儲存變更</button>
+            <div>
+              <label class="text-sm font-bold mb-1 block">姓名</label>
+              <input required name="name" value="${escapeHtmlAttr(s.name)}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            </div>
+
+            <div>
+              <label class="text-sm font-bold mb-1 block">職稱</label>
+              <input name="title" value="${escapeHtmlAttr(s.title || '')}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            </div>
+
+            <div>
+              <label class="text-sm font-bold mb-1 block">部門</label>
+              <input required name="dept" value="${escapeHtmlAttr(s.dept)}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            </div>
+
+            <div>
+              <label class="text-sm font-bold mb-1 block">到職日期</label>
+              <input type="date" required name="joinDate" value="${escapeHtmlAttr(s.joinDate)}" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            </div>
+
+            <div class="flex gap-3 pt-4">
+              <button type="button" onclick="deleteStaff('${escapeHtmlAttr(id)}')"
+                      class="px-6 py-4 border border-red-100 text-red-500 rounded-2xl font-bold">刪除</button>
+              <button type="submit"
+                      class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">儲存變更</button>
             </div>
           </form>
         </div>
@@ -861,122 +981,286 @@
     function handleUpdateStaff(e, oldId) {
       e.preventDefault();
       const fd = new FormData(e.target);
+
       const index = staff.findIndex(x => x.id === oldId);
       if (index < 0) return;
 
       const oldName = staff[index].name;
-      const newId   = fd.get('id');
-      const newName = fd.get('name');
-      const newDept = fd.get('dept');
-      const newTitle= fd.get('title') || "";
+      const newId = normalize(fd.get('id'));
+      const newName = normalize(fd.get('name'));
+      const newDept = normalize(fd.get('dept'));
 
-      // 若改了員工編號且撞到別人
-      if (newId !== oldId && staff.some(s => s.id === newId)) return alert("員工編號重複！");
+      // 如果更換員工編號，要避免重複
+      if (newId !== oldId && staff.some(s => s.id === newId)) return alert('員工編號重複！');
 
-      // 資產表：若 user = oldName -> 改成 newName，且部門同步
-      assets = assets.map(a => {
+      // 連動：資產保管人姓名變更
+      assets.forEach(a => {
         if (a.user === oldName) {
-          return { ...a, user: newName, dept: newDept || "" };
+          a.user = newName;
+          a.dept = newDept; // 同步最新部門
         }
-        return a;
       });
 
       staff[index] = {
         id: newId,
         name: newName,
-        title: newTitle,
+        title: normalize(fd.get('title')),
         dept: newDept,
-        joinDate: fd.get('joinDate')
+        joinDate: normalize(fd.get('joinDate'))
       };
 
-      // 更新 selectedStaffIds 中的 id（若被勾選）
+      // bulk selection set update
       if (selectedStaffIds.has(oldId)) {
         selectedStaffIds.delete(oldId);
         selectedStaffIds.add(newId);
       }
 
-      saveAll();
+      save();
       closeModal();
     }
 
     function deleteStaff(id) {
-      if(!confirm('確定刪除此員工？其保管的資產將變為未分配。')) return;
-
+      if (!confirm('確定刪除此員工？其保管的資產將變為未分配。')) return;
       const s = staff.find(x => x.id === id);
       staff = staff.filter(x => x.id !== id);
+      assets.forEach(a => { if (a.user === s.name) { a.user = ''; a.dept = ''; } });
       selectedStaffIds.delete(id);
-
-      assets = assets.map(a => {
-        if (a.user === (s?.name || "")) return { ...a, user: "", dept: "" };
-        return a;
-      });
-
-      saveAll();
+      save();
       closeModal();
     }
 
-    // =========================
-    // Generate Slip (dropdown staff)
-    // =========================
-    function openGenerateSlipModal(preselectUserName = "") {
-      const options = staff
-        .slice()
-        .sort((a,b)=>a.name.localeCompare(b.name,'zh-Hant'))
-        .map(s => {
-          const count = assets.filter(a => a.user === s.name).length;
-          const label = `${s.name}（${s.id} / ${s.dept || ''} / ${s.title || ''}｜${count}項設備）`;
-          return `<option value="${escapeHtml(s.name)}" ${preselectUserName===s.name?'selected':''}>${escapeHtml(label)}</option>`;
-        }).join("");
-
+    /*****************************
+     * Print: searchable dropdown UI
+     *****************************/
+    function openPrintModal() {
       openModal(`
         <div class="p-8">
-          <div class="flex items-center justify-between mb-6">
+          <div class="flex justify-between items-center mb-6">
             <h2 class="text-2xl font-black">生成領用單</h2>
             <button onclick="closeModal()" class="p-2 hover:bg-slate-100 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
           </div>
 
           <div class="space-y-4">
             <div>
-              <label class="text-sm font-bold mb-2 block">選擇領用員工</label>
-              <select id="slip-staff-select" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <option value="">-- 請選擇 --</option>
-                ${options}
-              </select>
+              <label class="text-xs font-bold text-slate-400 mb-2 block">部門（可搜尋）</label>
+              <div id="ss-dept"></div>
+            </div>
+
+            <div>
+              <label class="text-xs font-bold text-slate-400 mb-2 block">員工姓名（可搜尋）</label>
+              <div id="ss-staff"></div>
+              <p class="text-[11px] text-slate-400 mt-2">
+                只列出「名下有設備」的員工，避免生成沒內容。
+              </p>
             </div>
 
             <div class="flex gap-3 pt-2">
-              <button onclick="closeModal()" class="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold">取消</button>
-              <button onclick="handleGenerateSlipFromSelect()" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold">生成</button>
+              <button type="button" onclick="closeModal()"
+                      class="flex-1 py-3 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200">
+                取消
+              </button>
+              <button type="button" onclick="handleGeneratePrintFromSearchSelect()"
+                      class="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100">
+                生成
+              </button>
             </div>
-
-            <p class="text-xs text-slate-400 leading-relaxed">
-              提醒：只會生成「該員工名下」目前已分配的設備清單。
-            </p>
           </div>
         </div>
       `);
+
+      setTimeout(() => {
+        initPrintSearchSelects();
+        lucide.createIcons();
+      }, 0);
     }
 
-    function handleGenerateSlipFromSelect() {
-      const sel = document.getElementById("slip-staff-select");
-      const name = sel?.value || "";
-      if (!name) return alert("請先選擇員工。");
+    let printSelectedDept = '全部';
+    let printSelectedStaffName = '';
+
+    function initPrintSearchSelects() {
+      const deptOptions = ['全部', ...Array.from(getDeptSetFromStaff()).sort((a,b)=>a.localeCompare(b,'zh-Hant'))]
+        .map(d => ({ value: d, label: d }));
+
+      createSearchableSelect('ss-dept', deptOptions, '全部', (opt) => {
+        printSelectedDept = opt.value;
+        printSelectedStaffName = '';
+        updatePrintStaffSearchSelect();
+      });
+
+      updatePrintStaffSearchSelect();
+    }
+
+    function updatePrintStaffSearchSelect() {
+      const candidates = staff
+        .filter(s => {
+          const okDept = (printSelectedDept === '全部') ? true : (normalize(s.dept) === printSelectedDept);
+          if (!okDept) return false;
+          const count = assets.filter(a => a.user === s.name).length;
+          return count > 0;
+        })
+        .sort((a,b)=>normalize(a.name).localeCompare(normalize(b.name),'zh-Hant'))
+        .map(s => ({ value: s.name, label: s.name }));
+
+      createSearchableSelect('ss-staff', candidates, '', (opt) => {
+        printSelectedStaffName = opt.value;
+      }, { placeholder: '搜尋員工姓名…', emptyText: '此部門目前沒有可生成領用單的員工' });
+    }
+
+    function handleGeneratePrintFromSearchSelect() {
+      if (!printSelectedStaffName) {
+        alert('請先選擇員工');
+        return;
+      }
       closeModal();
-      generatePrintByUser(name);
+      generatePrintByUser(printSelectedStaffName);
     }
 
+    /**
+     * createSearchableSelect(containerId, options, defaultValue, onSelect, config)
+     * options: [{value,label}]
+     */
+    function createSearchableSelect(containerId, options, defaultValue, onSelect, config = {}) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      const placeholder = config.placeholder || '請搜尋或選擇…';
+      const emptyText = config.emptyText || '無符合項目';
+
+      // current value
+      let current = options.find(o => o.value === defaultValue) || null;
+
+      container.innerHTML = `
+        <div class="ss-wrap">
+          <button type="button" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold flex items-center justify-between gap-2"
+                  onclick="toggleSSPanel('${escapeHtmlAttr(containerId)}')">
+            <span id="${containerId}-label" class="${current ? 'text-slate-800' : 'text-slate-400'}">
+              ${current ? escapeHtml(current.label) : placeholder}
+            </span>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-slate-400"></i>
+          </button>
+
+          <div id="${containerId}-panel" class="ss-panel hidden">
+            <div class="p-3 border-b bg-white">
+              <div class="relative">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+                <input id="${containerId}-search" type="text"
+                       class="w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                       placeholder="${escapeHtmlAttr(placeholder)}"
+                       oninput="filterSS('${escapeHtmlAttr(containerId)}')">
+              </div>
+            </div>
+            <div id="${containerId}-list" class="max-h-72 overflow-y-auto custom-scroll p-2 bg-white"></div>
+          </div>
+
+          <input type="hidden" id="${containerId}-value" value="${current ? escapeHtmlAttr(current.value) : ''}">
+        </div>
+      `;
+
+      // render list
+      const list = document.getElementById(`${containerId}-list`);
+      list.innerHTML = renderSSList(containerId, options, current?.value, emptyText);
+
+      // attach callbacks in registry
+      ssRegistry[containerId] = { options, emptyText, onSelect };
+
+      // preselect callback
+      if (current) onSelect(current);
+
+      // icon render
+      lucide.createIcons();
+    }
+
+    const ssRegistry = {}; // { id: {options, emptyText, onSelect} }
+
+    function toggleSSPanel(containerId) {
+      // close others
+      Object.keys(ssRegistry).forEach(id => {
+        if (id !== containerId) {
+          const p = document.getElementById(`${id}-panel`);
+          if (p) p.classList.add('hidden');
+        }
+      });
+
+      const panel = document.getElementById(`${containerId}-panel`);
+      if (!panel) return;
+      panel.classList.toggle('hidden');
+
+      if (!panel.classList.contains('hidden')) {
+        const input = document.getElementById(`${containerId}-search`);
+        input.value = '';
+        input.focus();
+        filterSS(containerId);
+      }
+    }
+
+    function filterSS(containerId) {
+      const reg = ssRegistry[containerId];
+      if (!reg) return;
+
+      const q = (document.getElementById(`${containerId}-search`)?.value || '').toLowerCase();
+      const selected = document.getElementById(`${containerId}-value`)?.value || '';
+
+      const options = reg.options.filter(o => o.label.toLowerCase().includes(q));
+      const list = document.getElementById(`${containerId}-list`);
+      list.innerHTML = renderSSList(containerId, options, selected, reg.emptyText);
+      lucide.createIcons();
+    }
+
+    function renderSSList(containerId, options, selectedValue, emptyText) {
+      if (!options || options.length === 0) {
+        return `<div class="p-4 text-sm text-slate-400">${escapeHtml(emptyText)}</div>`;
+      }
+      return options.map(o => `
+        <button type="button"
+                class="ss-item w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-between ${o.value===selectedValue ? 'active' : 'text-slate-700'}"
+                onclick="selectSS('${escapeHtmlAttr(containerId)}','${escapeHtmlAttr(o.value)}')">
+          <span>${escapeHtml(o.label)}</span>
+          ${o.value===selectedValue ? '<i data-lucide="check" class="w-4 h-4"></i>' : ''}
+        </button>
+      `).join('');
+    }
+
+    function selectSS(containerId, value) {
+      const reg = ssRegistry[containerId];
+      if (!reg) return;
+      const opt = reg.options.find(o => o.value === value);
+      if (!opt) return;
+
+      document.getElementById(`${containerId}-value`).value = opt.value;
+      const label = document.getElementById(`${containerId}-label`);
+      label.textContent = opt.label;
+      label.className = 'text-slate-800';
+
+      document.getElementById(`${containerId}-panel`).classList.add('hidden');
+      reg.onSelect(opt);
+    }
+
+    // click outside close searchable dropdown panels
+    document.addEventListener('click', (e) => {
+      const isInside = e.target.closest('.ss-wrap');
+      if (isInside) return;
+      Object.keys(ssRegistry).forEach(id => {
+        const p = document.getElementById(`${id}-panel`);
+        if (p) p.classList.add('hidden');
+      });
+    });
+
+    /*****************************
+     * Print Generate (with title field)
+     *****************************/
     function generatePrintByUser(userName) {
-      if (!userName || userName === "null" || userName === "undefined") {
-        alert("請先選擇員工。");
+      userName = normalize(userName);
+      if (!userName) {
+        alert("該設備尚未分配給任何員工。");
         return;
       }
       const staffObj = staff.find(s => s.name === userName);
-      const userAssets = assets.filter(a => a.user === userName);
-
       if (!staffObj) {
-        alert("找不到該員工資料。");
+        alert("找不到員工資料，請先到員工管理建立該員工。");
         return;
       }
+
+      const userAssets = assets.filter(a => a.user === userName);
       if (userAssets.length === 0) {
         alert("該員工目前名下無任何領用設備。");
         return;
@@ -991,20 +1275,22 @@
           <div class="section-title">員工資訊</div>
           <table class="asset-table" style="margin-bottom: 30px;">
             <tr>
-              <td style="background: #f8fafc; font-weight: 700; width: 18%;">姓名</td>
-              <td style="width: 32%;">${escapeHtml(staffObj.name)}</td>
-              <td style="background: #f8fafc; font-weight: 700; width: 18%;">員工編號</td>
-              <td style="width: 32%; font-family: monospace;">${escapeHtml(staffObj.id)}</td>
+              <td style="background:#f8fafc;font-weight:700;width:18%;">姓名</td>
+              <td style="width:32%;">${escapeHtml(staffObj.name)}</td>
+              <td style="background:#f8fafc;font-weight:700;width:18%;">員工編號</td>
+              <td style="width:32%;font-family:monospace;">${escapeHtml(staffObj.id)}</td>
             </tr>
             <tr>
-              <td style="background: #f8fafc; font-weight: 700;">部門</td>
+              <td style="background:#f8fafc;font-weight:700;">部門</td>
               <td>${escapeHtml(staffObj.dept || '')}</td>
-              <td style="background: #f8fafc; font-weight: 700;">職稱</td>
+              <td style="background:#f8fafc;font-weight:700;">職稱</td>
               <td>${escapeHtml(staffObj.title || '')}</td>
             </tr>
             <tr>
-              <td style="background: #f8fafc; font-weight: 700;">到職日</td>
-              <td colspan="3">${escapeHtml(staffObj.joinDate || '')}</td>
+              <td style="background:#f8fafc;font-weight:700;">到職日</td>
+              <td>${escapeHtml(staffObj.joinDate || '')}</td>
+              <td style="background:#f8fafc;font-weight:700;">領用日期</td>
+              <td>${new Date().toLocaleDateString()}</td>
             </tr>
           </table>
 
@@ -1023,29 +1309,28 @@
                     ${escapeHtml(asset.id)}
                   </td>
                   <td>
-                    <div style="font-weight: 900; font-size: 16px; margin-bottom: 4px;">
-                      ${escapeHtml(asset.name)}
-                    </div>
-                    <div style="color: #64748b; font-size: 12px;">
-                      規格：${escapeHtml(asset.spec || '')}
-                    </div>
+                    <div style="font-weight: 900; font-size: 16px; margin-bottom: 4px;">${escapeHtml(asset.name)}</div>
+                    <div style="color: #64748b; font-size: 12px;">規格：${escapeHtml(asset.spec || '')}</div>
                   </td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
 
-          <div style="background: #f1f5f9; padding: 25px; border-radius: 12px; font-size: 14px; line-height: 2.2; border: 1px solid #e2e8f0; color: #334155;">
+          <div style="background:#f1f5f9;padding:25px;border-radius:12px;font-size:14px;line-height:2.2;border:1px solid #e2e8f0;color:#334155;">
             <p style="font-weight: 900; margin-bottom: 12px; font-size: 16px; color: #1e293b;">領用須知事項：</p>
-            1. 本設備為公司資產，僅供公務使用，領用人應善盡保管與合理使用義務。<br>
-            2. 如有遺失、遭竊、人為損毀或不當使用致設備損壞，領用人同意依公司指定維修/更換之報價金額負擔賠償責任。<br>
-            3. 設備故障請通知Admin並依流程報修，未經核准不得轉借他人或自行拆卸/維修。<br>
-            4. 離職或調職時，須依本清單逐項歸還設備及配件並完成清點結清。
+            1. 本表所列設備為公司資產，僅供公務使用；領用人應善盡保管與合理使用之責。<br>
+            2. 設備如有遺失、遭竊或因不當使用致損壞，領用人應依公司指定之維修/採購報價金額負擔賠償責任。<br>
+            3. 設備故障請立即通報管理部/IT 報修，未經核准不得轉借、拆卸或自行維修。<br>
+            4. 離職/調職時，須依清單逐項歸還並完成點交結清手續。
           </div>
 
-          <div style="margin-top: 100px; display: flex; justify-content: flex-start;">
+          <div style="margin-top: 100px; display:flex; gap:60px;">
             <div style="width: 320px;">
               <span style="font-size: 14px; font-weight: 900; color: #1e293b;">領用人簽名/日期：</span>
+            </div>
+            <div style="width: 320px;">
+              <span style="font-size: 14px; font-weight: 900; color: #1e293b;">管理部簽核/日期：</span>
             </div>
           </div>
         </div>
@@ -1057,188 +1342,209 @@
       lucide.createIcons();
     }
 
-    // =========================
-    // CSV Import / Export (Assets / Staff)
-    // =========================
-    const CSV_SCHEMA = {
-      assets: ["id","name","spec","user","dept","buyDate","warranty","price","receipt","warrantyDoc"],
-      staff:  ["id","name","title","dept","joinDate"]
-    };
-    const CSV_HEADER_LABELS = {
-      assets: { id:"資產編號", name:"設備名稱", spec:"規格", user:"保管人", dept:"部門", buyDate:"購買日期", warranty:"保固日期", price:"購買金額", receipt:"收據明細/網址", warrantyDoc:"保固書/網址" },
-      staff:  { id:"員工編號", name:"姓名", title:"職稱", dept:"部門", joinDate:"到職日期" }
-    };
-    const CSV_HEADER_ALIASES = {
-      "資產編號":"id","設備名稱":"name","規格":"spec","保管人":"user","部門":"dept","購買日期":"buyDate","保固日期":"warranty","購買金額":"price","收據明細/網址":"receipt","保固書/網址":"warrantyDoc",
-      "員工編號":"id","姓名":"name","職稱":"title","到職日期":"joinDate"
-    };
-
-    function toCSV(rows, keys, headerLabelsMap) {
-      const headerLabels = keys.map(k => headerLabelsMap?.[k] ?? k);
-      const escapeCell = (v) => {
-        const s = String(v ?? "");
-        if (/[,"\r\n]/.test(s)) return `"${s.replaceAll('"','""')}"`;
-        return s;
-      };
-      const lines = [];
-      lines.push(headerLabels.map(escapeCell).join(","));
-      for (const row of rows) lines.push(keys.map(k => escapeCell(row?.[k])).join(","));
-      return "\ufeff" + lines.join("\r\n"); // BOM for Excel
+    /*****************************
+     * CSV Export / Import
+     *****************************/
+    function triggerImport(kind) {
+      document.getElementById(kind === 'staff' ? 'import-staff' : 'import-assets').click();
     }
 
-    function parseCSV(text) {
-      const rows = [];
-      let row = [];
-      let cell = "";
-      let inQuotes = false;
-
-      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-
-      const pushCell = () => { row.push(cell); cell = ""; };
-      const pushRow  = () => { rows.push(row); row = []; };
-
-      for (let i=0;i<text.length;i++) {
-        const ch = text[i];
-        const next = text[i+1];
-
-        if (inQuotes) {
-          if (ch === '"' && next === '"') { cell += '"'; i++; }
-          else if (ch === '"') inQuotes = false;
-          else cell += ch;
-          continue;
-        }
-
-        if (ch === '"') { inQuotes = true; continue; }
-        if (ch === ",") { pushCell(); continue; }
-        if (ch === "\r" && next === "\n") { pushCell(); pushRow(); i++; continue; }
-        if (ch === "\n") { pushCell(); pushRow(); continue; }
-        cell += ch;
-      }
-      pushCell();
-      if (row.length > 1 || (row.length === 1 && row[0] !== "")) pushRow();
-      if (!rows.length) return { headers: [], rows: [] };
-      return { headers: rows[0].map(h => String(h||"").trim()), rows: rows.slice(1) };
+    function exportAssetsCSV() {
+      // columns
+      const headers = [
+        'id','name','spec','buyDate','warranty','price','user','dept','receipt','warrantyDoc'
+      ];
+      const rows = assets.map(a => headers.map(h => a[h] ?? ''));
+      downloadCSV('assets.csv', headers, rows);
     }
 
-    function normalizeHeaderKey(h) {
-      const key = String(h || "").trim();
-      return CSV_HEADER_ALIASES[key] || key;
+    function exportStaffCSV() {
+      const headers = ['id','name','title','dept','joinDate'];
+      const rows = staff.map(s => headers.map(h => s[h] ?? ''));
+      downloadCSV('staff.csv', headers, rows);
     }
 
-    function downloadFile(filename, content, mime) {
-      const blob = new Blob([content], { type: mime });
+    function downloadCSV(filename, headers, rows) {
+      const csv = toCSV(headers, rows);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
-      a.remove();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }
 
-    function exportCSV(type) {
-      const data = type === "assets" ? assets : staff;
-      const keys = CSV_SCHEMA[type];
-      const csv  = toCSV(data, keys, CSV_HEADER_LABELS[type]);
-      const filename = type === "assets" ? "assets.csv" : "staff.csv";
-      downloadFile(filename, csv, "text/csv;charset=utf-8");
-    }
-
-    function importCSV(type) {
-      const input = document.getElementById("import-file");
-      input.value = "";
-
-      input.onchange = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
+    function handleImportCSV(kind, file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
         try {
-          const text = await file.text();
+          const text = reader.result;
           const { headers, rows } = parseCSV(text);
-          if (!headers.length) return alert("匯入失敗：CSV 沒有表頭。");
 
-          const headerKeys = headers.map(normalizeHeaderKey);
-          const objs = rows
-            .filter(r => r.some(x => String(x ?? "").trim() !== ""))
-            .map(r => {
-              const obj = {};
-              headerKeys.forEach((k, idx) => obj[k] = (r[idx] ?? "").trim());
-              return obj;
-            });
+          if (kind === 'staff') {
+            // expect id,name,title,dept,joinDate (order doesn't matter if headers match)
+            const required = ['id','name','dept'];
+            required.forEach(r => { if (!headers.includes(r)) throw new Error(`缺少欄位：${r}`); });
 
-          if (type === "staff") {
-            const ok = objs.every(x => x.id && x.name);
-            if (!ok) return alert("員工 CSV 欄位不足：至少需要「員工編號」「姓名」。");
+            const imported = rows
+              .filter(r => normalize(r[headers.indexOf('id')]))
+              .map(r => ({
+                id: normalize(r[headers.indexOf('id')]),
+                name: normalize(r[headers.indexOf('name')]),
+                title: headers.includes('title') ? normalize(r[headers.indexOf('title')]) : '',
+                dept: normalize(r[headers.indexOf('dept')]),
+                joinDate: headers.includes('joinDate') ? normalize(r[headers.indexOf('joinDate')]) : ''
+              }));
 
-            staff = objs.map(s => ({
-              id: s.id,
-              name: s.name,
-              title: s.title || "",
-              dept: s.dept || "",
-              joinDate: s.joinDate || ""
-            }));
+            // merge by id (upsert)
+            const map = new Map(staff.map(s => [s.id, s]));
+            imported.forEach(s => map.set(s.id, s));
+            staff = Array.from(map.values());
 
-            // 匯入員工後：同步 assets 部門（以保管人姓名）
-            assets = assets.map(a => {
-              if (!a.user) return a;
-              const st = getStaffByName(a.user);
-              return st ? { ...a, dept: st.dept || "" } : a;
-            });
+            // 同步：若某員工姓名/部門變動，資產依姓名無法安全更新（因 CSV 可能改名）
+            // => 這裡不自動改資產，避免錯誤；若需同步，請在 UI 內改名（已提供自動連動）
+            save();
+            alert(`已匯入員工 ${imported.length} 筆（以員工編號合併更新）`);
+          } else {
+            const required = ['id','name'];
+            required.forEach(r => { if (!headers.includes(r)) throw new Error(`缺少欄位：${r}`); });
 
-            saveAll();
-            alert("員工匯入完成 ✅");
-            return;
+            const imported = rows
+              .filter(r => normalize(r[headers.indexOf('id')]))
+              .map(r => {
+                const obj = {};
+                headers.forEach((h, idx) => obj[h] = normalize(r[idx] ?? ''));
+                // ensure required
+                obj.id = normalize(obj.id);
+                obj.name = normalize(obj.name);
+                // dept auto from staff if user exists
+                if (obj.user) {
+                  const st = getStaffByName(obj.user);
+                  obj.dept = st ? st.dept : (obj.dept || '');
+                }
+                // keep optional history/repairs empty on import (can be extended)
+                obj.history = [];
+                obj.repairs = [];
+                return obj;
+              });
+
+            // upsert by id
+            const map = new Map(assets.map(a => [a.id, a]));
+            imported.forEach(a => map.set(a.id, a));
+            assets = Array.from(map.values());
+
+            save();
+            alert(`已匯入資產 ${imported.length} 筆（以資產編號合併更新）`);
           }
 
-          // assets
-          const ok = objs.every(x => x.id && x.name);
-          if (!ok) return alert("資產 CSV 欄位不足：至少需要「資產編號」「設備名稱」。");
-
-          assets = objs.map(a => {
-            const userName = a.user || "";
-            const st = getStaffByName(userName);
-            return {
-              id: a.id,
-              name: a.name,
-              spec: a.spec || "",
-              user: userName,
-              dept: st ? (st.dept || "") : (a.dept || ""),
-              buyDate: a.buyDate || "",
-              warranty: a.warranty || "",
-              price: a.price || "",
-              receipt: a.receipt || "",
-              warrantyDoc: a.warrantyDoc || "",
-              history: [],
-              repairs: []
-            };
-          });
-
-          saveAll();
-          alert("資產匯入完成 ✅");
         } catch (err) {
           console.error(err);
-          alert("匯入失敗：CSV 解析錯誤或格式不正確。");
+          alert(`匯入失敗：${err.message || err}`);
+        } finally {
+          // reset input
+          const input = document.getElementById(kind === 'staff' ? 'import-staff' : 'import-assets');
+          input.value = '';
         }
       };
-
-      input.click();
+      reader.readAsText(file, 'utf-8');
     }
 
-    // =========================
-    // Init
-    // =========================
-    window.onload = () => {
-      render();
-      // 點空白處關閉篩選選單
-      document.addEventListener("click", (e) => {
-        const aMenu = document.getElementById("asset-filter-menu");
-        const sMenu = document.getElementById("staff-dept-filter-menu");
-        if (aMenu && !aMenu.contains(e.target)) aMenu.classList.add("hidden");
-        if (sMenu && !sMenu.contains(e.target)) sMenu.classList.add("hidden");
+    function toCSV(headers, rows) {
+      const esc = (v) => {
+        const s = (v ?? '').toString();
+        if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      };
+      const lines = [];
+      lines.push(headers.map(esc).join(','));
+      rows.forEach(r => lines.push(r.map(esc).join(',')));
+      return lines.join('\n');
+    }
+
+    // Basic CSV parser (supports quotes)
+    function parseCSV(text) {
+      const rows = [];
+      let row = [];
+      let cur = '';
+      let inQuotes = false;
+
+      for (let i=0; i<text.length; i++) {
+        const ch = text[i];
+
+        if (inQuotes) {
+          if (ch === '"') {
+            const next = text[i+1];
+            if (next === '"') { cur += '"'; i++; }
+            else { inQuotes = false; }
+          } else {
+            cur += ch;
+          }
+        } else {
+          if (ch === '"') inQuotes = true;
+          else if (ch === ',') { row.push(cur); cur = ''; }
+          else if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+          else if (ch === '\r') { /* ignore */ }
+          else { cur += ch; }
+        }
+      }
+      row.push(cur);
+      rows.push(row);
+
+      // trim empty last line
+      while (rows.length && rows[rows.length-1].every(c => normalize(c) === '')) rows.pop();
+
+      const headers = (rows.shift() || []).map(h => normalize(h));
+      const dataRows = rows.map(r => {
+        const out = [];
+        for (let i=0; i<headers.length; i++) out.push(r[i] ?? '');
+        return out;
       });
+      return { headers, rows: dataRows };
+    }
+
+    /*****************************
+     * Modal base
+     *****************************/
+    function openModal(html) {
+      document.getElementById('modal-content').innerHTML = html;
+      document.getElementById('modal-overlay').classList.remove('hidden');
+      lucide.createIcons();
+    }
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.add('hidden');
+    }
+    function closePreview() {
+      document.getElementById('preview-overlay').classList.add('hidden');
+    }
+
+    /*****************************
+     * Escape helpers
+     *****************************/
+    function escapeHtml(s) {
+      return (s ?? '').toString()
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#39;');
+    }
+    function escapeHtmlAttr(s) {
+      return escapeHtml(s).replace(/`/g,'&#96;');
+    }
+
+    /*****************************
+     * Init
+     *****************************/
+    window.onload = () => {
+      // Default labels
+      document.getElementById('assets-dept-filter-label').textContent = assetsDeptFilter;
+      document.getElementById('staff-dept-filter-label').textContent  = staffDeptFilter;
+      render();
     };
   </script>
 </body>
 </html>
-
