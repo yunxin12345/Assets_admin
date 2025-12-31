@@ -117,8 +117,7 @@
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div class="space-y-2">
           <h2 class="text-2xl font-black">資產清冊</h2>
-
-          <div class="flex gap-2 flex-wrap items-center">
+          <div class="flex gap-2 flex-wrap">
             <button onclick="exportAssetsCSV()" class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2">
               <i data-lucide="download" class="w-4 h-4"></i> 匯出 CSV
             </button>
@@ -135,22 +134,20 @@
                 <!-- filled by JS -->
               </div>
             </div>
-
-            <!-- ✅ 批次刪除（資產） -->
-            <button id="btn-bulk-delete-assets" disabled
-                    onclick="bulkDeleteAssets()"
-                    class="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-black flex items-center gap-2 opacity-40 cursor-not-allowed">
-              <i data-lucide="trash-2" class="w-4 h-4"></i> 批次刪除
-            </button>
           </div>
         </div>
 
-        <div class="flex gap-2">
+        <div class="flex gap-2 items-center">
           <div class="relative">
             <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
             <input type="text" id="asset-search" placeholder="搜尋設備名稱或編號..."
                    class="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm w-64 focus:ring-2 focus:ring-indigo-500 outline-none">
           </div>
+
+          <button onclick="bulkDeleteAssets()"
+                  class="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-black flex items-center gap-2 hover:bg-red-100 transition-colors">
+            <i data-lucide="trash-2" class="w-4 h-4"></i> 批次刪除
+          </button>
 
           <button onclick="showAddAssetModal()"
                   class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-black flex items-center gap-2 shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">
@@ -163,12 +160,9 @@
         <table class="w-full text-left">
           <thead class="bg-slate-50 border-b border-slate-200 text-[11px] font-black text-slate-400 uppercase tracking-wider">
             <tr>
-              <!-- ✅ 全選（只針對目前篩選後可見的那批） -->
-              <th class="p-4 w-12 normal-case">
-                <input type="checkbox" id="asset-check-all" class="w-5 h-5 accent-indigo-600"
-                       onclick="toggleAssetCheckAll(this.checked)">
+              <th class="p-4 w-12">
+                <input type="checkbox" id="asset-check-all" class="w-5 h-5 accent-indigo-600" onclick="toggleAssetCheckAll(this.checked)">
               </th>
-
               <th class="p-4 w-[160px]">資產編號</th>
 
               <th class="p-4">
@@ -308,6 +302,12 @@
       { id: "EMP001", name: "王大明", title: "工程師", dept: "技術部", joinDate: "2023-01-01" }
     ];
 
+    // 兼容舊資料：補上 pickupDate 欄位（領取日期）
+    assets = assets.map(a => ({
+      pickupDate: a.pickupDate || '',
+      ...a
+    }));
+
     /*****************************
      * UI State
      *****************************/
@@ -316,10 +316,10 @@
     let assetsDeptFilter = '全部';     // dept name or 全部
     let staffDeptFilter  = '全部';     // dept name or 全部
     let selectedStaffIds = new Set(); // bulk delete staff
+    let selectedAssetIds = new Set(); // bulk delete assets
 
-    // ✅ 資產批次刪除：只針對「目前篩選後可見」那批
-    let selectedAssetIds = new Set();
-    let lastVisibleAssetIds = []; // 每次 render 都更新（＝目前篩選後的資產 id 清單）
+    // render 時會更新
+    let lastFilteredAssetIds = [];
 
     /*****************************
      * Save / Helpers
@@ -346,10 +346,6 @@
     }
     function getDeptSetFromAssets() {
       return new Set(assets.map(a => normalize(a.dept)).filter(Boolean));
-    }
-
-    function getVisibleAssetIds() {
-      return lastVisibleAssetIds.slice();
     }
 
     /*****************************
@@ -442,58 +438,6 @@
     }
 
     /*****************************
-     * ✅ Assets bulk select / delete
-     *****************************/
-    function toggleAssetSelect(id, checked) {
-      if (checked) selectedAssetIds.add(id);
-      else selectedAssetIds.delete(id);
-      syncAssetCheckAll();
-      updateAssetBulkBtn();
-    }
-
-    function toggleAssetCheckAll(checked) {
-      // ✅ 只針對「目前篩選後可見」那批
-      const visibleIds = getVisibleAssetIds();
-      if (checked) visibleIds.forEach(id => selectedAssetIds.add(id));
-      else visibleIds.forEach(id => selectedAssetIds.delete(id));
-      render(); // 重新渲染 checkbox
-    }
-
-    function syncAssetCheckAll() {
-      const visibleIds = getVisibleAssetIds();
-      const allChecked = visibleIds.length > 0 && visibleIds.every(id => selectedAssetIds.has(id));
-      const el = document.getElementById('asset-check-all');
-      if (el) el.checked = allChecked;
-    }
-
-    function updateAssetBulkBtn() {
-      const btn = document.getElementById('btn-bulk-delete-assets');
-      if (!btn) return;
-      const n = selectedAssetIds.size;
-      btn.disabled = n === 0;
-      btn.textContent = n === 0 ? '批次刪除' : `批次刪除（${n}）`;
-      btn.classList.toggle('opacity-40', n === 0);
-      btn.classList.toggle('cursor-not-allowed', n === 0);
-      lucide.createIcons();
-    }
-
-    function bulkDeleteAssets() {
-      const n = selectedAssetIds.size;
-      if (n === 0) return alert('請先勾選要刪除的資產');
-
-      // ✅ Confirm 字樣加「無法復原」
-      if (!confirm(`確定刪除 ${n} 項資產？此動作無法復原。`)) return;
-
-      const idsToDelete = new Set(selectedAssetIds);
-      assets = assets.filter(a => !idsToDelete.has(a.id));
-
-      // ✅ 刪除完要 clear，避免下一次誤刪
-      selectedAssetIds.clear();
-
-      save(); // save() 會 render()
-    }
-
-    /*****************************
      * Render
      *****************************/
     function render() {
@@ -526,8 +470,8 @@
         });
       }
 
-      // ✅ 更新「目前篩選後可見」清單（用於全選＆同步）
-      lastVisibleAssetIds = filteredAssets.map(a => a.id);
+      // 保存本次「篩選後」清單，用於批次刪除/全選（避免誤刪其他部門）
+      lastFilteredAssetIds = filteredAssets.map(a => a.id);
 
       const sortIcon = document.getElementById('sort-icon-name');
       if (currentSort.key === 'name') {
@@ -541,13 +485,11 @@
       const assetList = document.getElementById('asset-list');
       assetList.innerHTML = filteredAssets.map(a => `
         <tr class="hover:bg-slate-50 cursor-pointer transition-colors" onclick="showAssetDetail('${escapeHtmlAttr(a.id)}')">
-          <!-- ✅ checkbox（避免點到 row 觸發 showAssetDetail） -->
-          <td class="p-4" onclick="event.stopPropagation()">
+          <td class="p-4" onclick="event.stopPropagation();">
             <input type="checkbox" class="w-5 h-5 accent-indigo-600"
                    ${selectedAssetIds.has(a.id) ? 'checked' : ''}
                    onclick="toggleAssetSelect('${escapeHtmlAttr(a.id)}', this.checked)">
           </td>
-
           <td class="p-4 font-mono text-xs font-bold text-indigo-600">${escapeHtml(a.id)}</td>
           <td class="p-4 font-bold text-slate-700">${escapeHtml(a.name)}</td>
           <td class="p-4">${a.user ? escapeHtml(a.user) : '<span class="text-slate-300">未分配</span>'}</td>
@@ -561,6 +503,8 @@
           </td>
         </tr>
       `).join('');
+
+      syncAssetCheckAll();
 
       // Staff
       const staffList = document.getElementById('staff-list');
@@ -587,11 +531,54 @@
         </tr>
       `).join('');
 
-      // ✅ 同步資產的全選 checkbox & 批次刪除按鈕狀態
-      syncAssetCheckAll();
-      updateAssetBulkBtn();
-
       lucide.createIcons();
+    }
+
+    /*****************************
+     * Bulk Select / Delete Assets
+     *****************************/
+    function toggleAssetSelect(id, checked) {
+      if (checked) selectedAssetIds.add(id);
+      else selectedAssetIds.delete(id);
+      syncAssetCheckAll();
+    }
+
+    function toggleAssetCheckAll(checked) {
+      // 只針對「目前篩選後」的資產做全選/全取消
+      const ids = lastFilteredAssetIds || [];
+      if (checked) ids.forEach(id => selectedAssetIds.add(id));
+      else ids.forEach(id => selectedAssetIds.delete(id));
+      render();
+      syncAssetCheckAll();
+    }
+
+    function syncAssetCheckAll() {
+      const ids = lastFilteredAssetIds || [];
+      const allChecked = ids.length > 0 && ids.every(id => selectedAssetIds.has(id));
+      const el = document.getElementById('asset-check-all');
+      if (el) el.checked = allChecked;
+    }
+
+    function bulkDeleteAssets() {
+      // 只刪除「目前篩選後」且「勾選到」的，避免部門篩選在 Marketing 卻刪到全部資產
+      const filteredSet = new Set(lastFilteredAssetIds || []);
+      const deletable = Array.from(selectedAssetIds).filter(id => filteredSet.has(id));
+
+      if (deletable.length === 0) {
+        alert('請先勾選要刪除的資產（僅會刪除目前篩選後的勾選項目）');
+        return;
+      }
+
+      if (!confirm(`確定刪除目前勾選的 ${deletable.length} 筆資產？（無法復原）`)) return;
+
+      const delSet = new Set(deletable);
+      assets = assets.filter(a => !delSet.has(a.id));
+
+      // 刪除後清空，避免下次誤刪
+      selectedAssetIds.clear();
+
+      save();
+      // render() 由 save() 觸發
     }
 
     /*****************************
@@ -630,6 +617,7 @@
         if (namesToDelete.has(a.user)) {
           a.user = '';
           a.dept = '';
+          a.pickupDate = '';
         }
       });
 
@@ -689,12 +677,19 @@
                 <label class="text-sm font-bold mb-1 block">保固日期</label>
                 <input type="date" name="warranty" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
               </div>
+
+              <div>
+                <label class="text-sm font-bold mb-1 block">領取日期</label>
+                <input type="date" name="pickupDate" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <p class="text-[11px] text-slate-400 mt-2">設備實際交付/領用日期（可空）</p>
+              </div>
+
               <div>
                 <label class="text-sm font-bold mb-1 block">購買金額</label>
                 <input type="number" name="price" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
               </div>
 
-              <div>
+              <div class="col-span-2">
                 <label class="text-sm font-bold mb-1 block">保管人（員工）</label>
                 <select name="user" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
                   <option value="">-- 未分配 --</option>
@@ -754,6 +749,7 @@
         spec: normalize(fd.get('spec')),
         buyDate: normalize(fd.get('buyDate')),
         warranty: normalize(fd.get('warranty')),
+        pickupDate: normalize(fd.get('pickupDate')), // ✅ 新增：領取日期
         price: normalize(fd.get('price')),
         user: userName,
         dept: staffObj ? staffObj.dept : '',
@@ -823,12 +819,18 @@
                        class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
               </div>
 
+              <!-- ✅ 新增：領取日期 -->
+              <div>
+                <label class="text-xs font-bold text-slate-400 mb-1 block">領取日期</label>
+                <input type="date" name="pickupDate" value="${escapeHtmlAttr(a.pickupDate || '')}"
+                       class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              </div>
+
               <div>
                 <label class="text-xs font-bold text-slate-400 mb-1 block">購買金額</label>
                 <input type="number" name="price" value="${escapeHtmlAttr(a.price || '')}"
                        class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl">
               </div>
-              <div></div>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
@@ -920,8 +922,9 @@
         user: newUser,
         dept: staffObj ? staffObj.dept : '',
         buyDate: normalize(fd.get('buyDate')),
-        price: normalize(fd.get('price')),
         warranty: normalize(fd.get('warranty')),
+        pickupDate: normalize(fd.get('pickupDate')), // ✅ 新增：領取日期
+        price: normalize(fd.get('price')),
         receipt: normalize(fd.get('receipt')),
         warrantyDoc: normalize(fd.get('warrantyDoc'))
       };
@@ -946,7 +949,7 @@
     }
 
     function deleteAsset(id) {
-      if (!confirm('確定刪除此資產？此動作無法復原。')) return;
+      if (!confirm('確定刪除此資產？（無法復原）')) return;
       assets = assets.filter(a => a.id !== id);
       selectedAssetIds.delete(id);
       save();
@@ -1079,12 +1082,14 @@
       const newName = normalize(fd.get('name'));
       const newDept = normalize(fd.get('dept'));
 
+      // 如果更換員工編號，要避免重複
       if (newId !== oldId && staff.some(s => s.id === newId)) return alert('員工編號重複！');
 
+      // 連動：資產保管人姓名變更
       assets.forEach(a => {
         if (a.user === oldName) {
           a.user = newName;
-          a.dept = newDept;
+          a.dept = newDept; // 同步最新部門
         }
       });
 
@@ -1096,6 +1101,7 @@
         joinDate: normalize(fd.get('joinDate'))
       };
 
+      // bulk selection set update
       if (selectedStaffIds.has(oldId)) {
         selectedStaffIds.delete(oldId);
         selectedStaffIds.add(newId);
@@ -1106,10 +1112,10 @@
     }
 
     function deleteStaff(id) {
-      if (!confirm('確定刪除此員工？其保管的資產將變為未分配。')) return;
+      if (!confirm('確定刪除此員工？其保管的資產將變為未分配。（無法復原）')) return;
       const s = staff.find(x => x.id === id);
       staff = staff.filter(x => x.id !== id);
-      assets.forEach(a => { if (a.user === s.name) { a.user = ''; a.dept = ''; } });
+      assets.forEach(a => { if (a.user === s.name) { a.user = ''; a.dept = ''; a.pickupDate = ''; } });
       selectedStaffIds.delete(id);
       save();
       closeModal();
@@ -1201,6 +1207,10 @@
       generatePrintByUser(printSelectedStaffName);
     }
 
+    /**
+     * createSearchableSelect(containerId, options, defaultValue, onSelect, config)
+     * options: [{value,label}]
+     */
     function createSearchableSelect(containerId, options, defaultValue, onSelect, config = {}) {
       const container = document.getElementById(containerId);
       if (!container) return;
@@ -1208,6 +1218,7 @@
       const placeholder = config.placeholder || '請搜尋或選擇…';
       const emptyText = config.emptyText || '無符合項目';
 
+      // current value
       let current = options.find(o => o.value === defaultValue) || null;
 
       container.innerHTML = `
@@ -1237,19 +1248,24 @@
         </div>
       `;
 
+      // render list
       const list = document.getElementById(`${containerId}-list`);
       list.innerHTML = renderSSList(containerId, options, current?.value, emptyText);
 
+      // attach callbacks in registry
       ssRegistry[containerId] = { options, emptyText, onSelect };
 
+      // preselect callback
       if (current) onSelect(current);
 
+      // icon render
       lucide.createIcons();
     }
 
-    const ssRegistry = {};
+    const ssRegistry = {}; // { id: {options, emptyText, onSelect} }
 
     function toggleSSPanel(containerId) {
+      // close others
       Object.keys(ssRegistry).forEach(id => {
         if (id !== containerId) {
           const p = document.getElementById(`${id}-panel`);
@@ -1311,6 +1327,7 @@
       reg.onSelect(opt);
     }
 
+    // click outside close searchable dropdown panels
     document.addEventListener('click', (e) => {
       const isInside = e.target.closest('.ss-wrap');
       if (isInside) return;
@@ -1386,6 +1403,7 @@
                   <td>
                     <div style="font-weight: 900; font-size: 16px; margin-bottom: 4px;">${escapeHtml(asset.name)}</div>
                     <div style="color: #64748b; font-size: 12px;">規格：${escapeHtml(asset.spec || '')}</div>
+                    ${asset.pickupDate ? `<div style="color:#64748b;font-size:12px;">領取日期：${escapeHtml(asset.pickupDate)}</div>` : ''}
                   </td>
                 </tr>
               `).join('')}
@@ -1394,10 +1412,10 @@
 
           <div style="background:#f1f5f9;padding:25px;border-radius:12px;font-size:14px;line-height:2.2;border:1px solid #e2e8f0;color:#334155;">
             <p style="font-weight: 900; margin-bottom: 12px; font-size: 16px; color: #1e293b;">領用須知事項：</p>
-            1. 本表所列設備為公司資產，領用人應善盡保管之責。<br>
+            1. 本表所列設備為公司資產，僅供公務使用；領用人應善盡保管與合理使用之責。<br>
             2. 設備如有遺失、遭竊或因不當使用致損壞，領用人應依公司指定之維修/採購報價金額負擔賠償責任。<br>
-            3. 設備故障請通知Admin報修。<br>
-            4. 員工於離職或依公司要求時，應立即將所領用之設備及其所有配，一併完整歸還予公司。
+            3. 設備故障請立即通報管理部/IT 報修，未經核准不得轉借、拆卸或自行維修。<br>
+            4. 離職/調職時，須依清單逐項歸還並完成點交結清手續。
           </div>
 
           <div style="margin-top: 100px; display:flex; gap:60px;">
@@ -1418,14 +1436,17 @@
     }
 
     /*****************************
-     * CSV Export / Import
+     * CSV Export / Import (Fix Excel Garbled)
      *****************************/
     function triggerImport(kind) {
       document.getElementById(kind === 'staff' ? 'import-staff' : 'import-assets').click();
     }
 
     function exportAssetsCSV() {
-      const headers = ['id','name','spec','buyDate','warranty','price','user','dept','receipt','warrantyDoc'];
+      // ✅ 新增 pickupDate 欄位
+      const headers = [
+        'id','name','spec','buyDate','warranty','pickupDate','price','user','dept','receipt','warrantyDoc'
+      ];
       const rows = assets.map(a => headers.map(h => a[h] ?? ''));
       downloadCSV('assets.csv', headers, rows);
     }
@@ -1437,12 +1458,9 @@
     }
 
     function downloadCSV(filename, headers, rows) {
-      const csv = toCSV(headers, rows);
-
-      // ✅ 避免 Excel 下載後中文亂碼：加 UTF-8 BOM
-      const BOM = '\uFEFF';
-      const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
-
+      // ✅ Excel 亂碼修正：加 UTF-8 BOM
+      const csv = '\uFEFF' + toCSV(headers, rows);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -1453,71 +1471,114 @@
       URL.revokeObjectURL(url);
     }
 
-    function handleImportCSV(kind, file) {
+    async function handleImportCSV(kind, file) {
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const text = reader.result;
-          const { headers, rows } = parseCSV(text);
 
-          if (kind === 'staff') {
-            const required = ['id','name','dept'];
-            required.forEach(r => { if (!headers.includes(r)) throw new Error(`缺少欄位：${r}`); });
+      try {
+        const text = await readFileAsTextSmart(file);
+        const { headers, rows } = parseCSV(text);
 
-            const imported = rows
-              .filter(r => normalize(r[headers.indexOf('id')]))
-              .map(r => ({
-                id: normalize(r[headers.indexOf('id')]),
-                name: normalize(r[headers.indexOf('name')]),
-                title: headers.includes('title') ? normalize(r[headers.indexOf('title')]) : '',
-                dept: normalize(r[headers.indexOf('dept')]),
-                joinDate: headers.includes('joinDate') ? normalize(r[headers.indexOf('joinDate')]) : ''
-              }));
+        if (kind === 'staff') {
+          const required = ['id','name','dept'];
+          required.forEach(r => { if (!headers.includes(r)) throw new Error(`缺少欄位：${r}`); });
 
-            const map = new Map(staff.map(s => [s.id, s]));
-            imported.forEach(s => map.set(s.id, s));
-            staff = Array.from(map.values());
+          const imported = rows
+            .filter(r => normalize(r[headers.indexOf('id')]))
+            .map(r => ({
+              id: normalize(r[headers.indexOf('id')]),
+              name: normalize(r[headers.indexOf('name')]),
+              title: headers.includes('title') ? normalize(r[headers.indexOf('title')]) : '',
+              dept: normalize(r[headers.indexOf('dept')]),
+              joinDate: headers.includes('joinDate') ? normalize(r[headers.indexOf('joinDate')]) : ''
+            }));
 
-            save();
-            alert(`已匯入員工 ${imported.length} 筆（以員工編號合併更新）`);
-          } else {
-            const required = ['id','name'];
-            required.forEach(r => { if (!headers.includes(r)) throw new Error(`缺少欄位：${r}`); });
+          const map = new Map(staff.map(s => [s.id, s]));
+          imported.forEach(s => map.set(s.id, s));
+          staff = Array.from(map.values());
 
-            const imported = rows
-              .filter(r => normalize(r[headers.indexOf('id')]))
-              .map(r => {
-                const obj = {};
-                headers.forEach((h, idx) => obj[h] = normalize(r[idx] ?? ''));
-                obj.id = normalize(obj.id);
-                obj.name = normalize(obj.name);
-                if (obj.user) {
-                  const st = getStaffByName(obj.user);
-                  obj.dept = st ? st.dept : (obj.dept || '');
-                }
-                obj.history = [];
-                obj.repairs = [];
-                return obj;
-              });
+          save();
+          alert(`已匯入員工 ${imported.length} 筆（以員工編號合併更新）`);
+        } else {
+          const required = ['id','name'];
+          required.forEach(r => { if (!headers.includes(r)) throw new Error(`缺少欄位：${r}`); });
 
-            const map = new Map(assets.map(a => [a.id, a]));
-            imported.forEach(a => map.set(a.id, a));
-            assets = Array.from(map.values());
+          const imported = rows
+            .filter(r => normalize(r[headers.indexOf('id')]))
+            .map(r => {
+              const obj = {};
+              headers.forEach((h, idx) => obj[h] = normalize(r[idx] ?? ''));
 
-            save();
-            alert(`已匯入資產 ${imported.length} 筆（以資產編號合併更新）`);
-          }
+              obj.id = normalize(obj.id);
+              obj.name = normalize(obj.name);
 
-        } catch (err) {
-          console.error(err);
-          alert(`匯入失敗：${err.message || err}`);
-        } finally {
-          const input = document.getElementById(kind === 'staff' ? 'import-staff' : 'import-assets');
-          input.value = '';
+              // dept auto from staff if user exists
+              if (obj.user) {
+                const st = getStaffByName(obj.user);
+                obj.dept = st ? st.dept : (obj.dept || '');
+              }
+
+              // ✅ 確保 pickupDate 存在（沒有就空）
+              obj.pickupDate = normalize(obj.pickupDate || '');
+
+              obj.history = [];
+              obj.repairs = [];
+              return obj;
+            });
+
+          const map = new Map(assets.map(a => [a.id, a]));
+          imported.forEach(a => map.set(a.id, a));
+          assets = Array.from(map.values()).map(a => ({
+            pickupDate: a.pickupDate || '',
+            ...a
+          }));
+
+          save();
+          alert(`已匯入資產 ${imported.length} 筆（以資產編號合併更新）`);
         }
-      };
-      reader.readAsText(file, 'utf-8');
+
+      } catch (err) {
+        console.error(err);
+        alert(`匯入失敗：${err.message || err}`);
+      } finally {
+        const input = document.getElementById(kind === 'staff' ? 'import-staff' : 'import-assets');
+        input.value = '';
+      }
+    }
+
+    // ✅ 智慧解碼：UTF-8 → Big5(cp950) fallback（解 Excel 常見亂碼）
+    function readFileAsTextSmart(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('檔案讀取失敗'));
+        reader.onload = () => {
+          try {
+            const buf = reader.result;
+            let text = decodeWith('utf-8', buf);
+            if (looksGarbled(text)) {
+              // 常見：Excel (Windows) 匯出 cp950/big5
+              text = decodeWith('big5', buf);
+            }
+            // 去 BOM
+            text = text.replace(/^\uFEFF/, '');
+            resolve(text);
+          } catch (e) {
+            reject(e);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function decodeWith(encoding, buf) {
+      // TextDecoder 支援 utf-8 / big5（大多數現代瀏覽器可）
+      const dec = new TextDecoder(encoding, { fatal: false });
+      return dec.decode(buf);
+    }
+
+    function looksGarbled(text) {
+      // 以「替換字元 �」比例判斷是否亂碼
+      const bad = (text.match(/\uFFFD/g) || []).length;
+      return bad >= 2; // 有明顯亂碼就切換編碼
     }
 
     function toCSV(headers, rows) {
@@ -1532,6 +1593,7 @@
       return lines.join('\n');
     }
 
+    // Basic CSV parser (supports quotes)
     function parseCSV(text) {
       const rows = [];
       let row = [];
@@ -1612,4 +1674,5 @@
   </script>
 </body>
 </html>
+
 
