@@ -400,7 +400,7 @@
       staffMenu.innerHTML = staffDepts.map(d => `
         <button onclick="setDeptFilter('staff','${escapeHtmlAttr(d)}')"
                 class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg">
-          ${d}
+          ${escapeHtml(d)}
         </button>
       `).join('');
 
@@ -414,7 +414,7 @@
       assetsMenu.innerHTML = assetsDepts.map(d => `
         <button onclick="setDeptFilter('assets','${escapeHtmlAttr(d)}')"
                 class="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs text-slate-700 rounded-lg">
-          ${d}
+          ${escapeHtml(d)}
         </button>
       `).join('');
     }
@@ -426,7 +426,7 @@
       buildDeptMenus();
 
       // Assets
-      const searchTerm = document.getElementById('asset-search').value.toLowerCase();
+      const searchTerm = (document.getElementById('asset-search').value || '').toLowerCase();
       let filteredAssets = assets.filter(a => {
         const matchSearch = (a.name||'').toLowerCase().includes(searchTerm) || (a.id||'').toLowerCase().includes(searchTerm);
         if (!matchSearch) return false;
@@ -504,6 +504,7 @@
       `).join('');
 
       lucide.createIcons();
+      syncStaffCheckAll();
     }
 
     /*****************************
@@ -520,13 +521,13 @@
       if (checked) staffFiltered.forEach(s => selectedStaffIds.add(s.id));
       else staffFiltered.forEach(s => selectedStaffIds.delete(s.id));
       render();
-      syncStaffCheckAll();
     }
 
     function syncStaffCheckAll() {
       const staffFiltered = staff.filter(s => (staffDeptFilter === '全部') ? true : (normalize(s.dept) === staffDeptFilter));
       const allChecked = staffFiltered.length > 0 && staffFiltered.every(s => selectedStaffIds.has(s.id));
-      document.getElementById('staff-check-all').checked = allChecked;
+      const el = document.getElementById('staff-check-all');
+      if (el) el.checked = allChecked;
     }
 
     function bulkDeleteStaff() {
@@ -547,7 +548,8 @@
 
       selectedStaffIds.clear();
       save();
-      document.getElementById('staff-check-all').checked = false;
+      const el = document.getElementById('staff-check-all');
+      if (el) el.checked = false;
     }
 
     /*****************************
@@ -990,14 +992,12 @@
       const newName = normalize(fd.get('name'));
       const newDept = normalize(fd.get('dept'));
 
-      // 如果更換員工編號，要避免重複
       if (newId !== oldId && staff.some(s => s.id === newId)) return alert('員工編號重複！');
 
-      // 連動：資產保管人姓名變更
       assets.forEach(a => {
         if (a.user === oldName) {
           a.user = newName;
-          a.dept = newDept; // 同步最新部門
+          a.dept = newDept;
         }
       });
 
@@ -1009,7 +1009,6 @@
         joinDate: normalize(fd.get('joinDate'))
       };
 
-      // bulk selection set update
       if (selectedStaffIds.has(oldId)) {
         selectedStaffIds.delete(oldId);
         selectedStaffIds.add(newId);
@@ -1126,7 +1125,6 @@
       const placeholder = config.placeholder || '請搜尋或選擇…';
       const emptyText = config.emptyText || '無符合項目';
 
-      // current value
       let current = options.find(o => o.value === defaultValue) || null;
 
       container.innerHTML = `
@@ -1156,24 +1154,19 @@
         </div>
       `;
 
-      // render list
       const list = document.getElementById(`${containerId}-list`);
       list.innerHTML = renderSSList(containerId, options, current?.value, emptyText);
 
-      // attach callbacks in registry
       ssRegistry[containerId] = { options, emptyText, onSelect };
 
-      // preselect callback
       if (current) onSelect(current);
 
-      // icon render
       lucide.createIcons();
     }
 
     const ssRegistry = {}; // { id: {options, emptyText, onSelect} }
 
     function toggleSSPanel(containerId) {
-      // close others
       Object.keys(ssRegistry).forEach(id => {
         if (id !== containerId) {
           const p = document.getElementById(`${id}-panel`);
@@ -1187,8 +1180,10 @@
 
       if (!panel.classList.contains('hidden')) {
         const input = document.getElementById(`${containerId}-search`);
-        input.value = '';
-        input.focus();
+        if (input) {
+          input.value = '';
+          input.focus();
+        }
         filterSS(containerId);
       }
     }
@@ -1200,9 +1195,9 @@
       const q = (document.getElementById(`${containerId}-search`)?.value || '').toLowerCase();
       const selected = document.getElementById(`${containerId}-value`)?.value || '';
 
-      const options = reg.options.filter(o => o.label.toLowerCase().includes(q));
+      const options = reg.options.filter(o => (o.label || '').toLowerCase().includes(q));
       const list = document.getElementById(`${containerId}-list`);
-      list.innerHTML = renderSSList(containerId, options, selected, reg.emptyText);
+      if (list) list.innerHTML = renderSSList(containerId, options, selected, reg.emptyText);
       lucide.createIcons();
     }
 
@@ -1228,14 +1223,16 @@
 
       document.getElementById(`${containerId}-value`).value = opt.value;
       const label = document.getElementById(`${containerId}-label`);
-      label.textContent = opt.label;
-      label.className = 'text-slate-800';
+      if (label) {
+        label.textContent = opt.label;
+        label.className = 'text-slate-800';
+      }
 
-      document.getElementById(`${containerId}-panel`).classList.add('hidden');
+      const panel = document.getElementById(`${containerId}-panel`);
+      if (panel) panel.classList.add('hidden');
       reg.onSelect(opt);
     }
 
-    // click outside close searchable dropdown panels
     document.addEventListener('click', (e) => {
       const isInside = e.target.closest('.ss-wrap');
       if (isInside) return;
@@ -1246,7 +1243,7 @@
     });
 
     /*****************************
-     * Print Generate (with title field)
+     * Print Generate
      *****************************/
     function generatePrintByUser(userName) {
       userName = normalize(userName);
@@ -1343,17 +1340,14 @@
     }
 
     /*****************************
-     * CSV Export / Import
+     * CSV Export / Import (FIXED ENCODING)
      *****************************/
     function triggerImport(kind) {
       document.getElementById(kind === 'staff' ? 'import-staff' : 'import-assets').click();
     }
 
     function exportAssetsCSV() {
-      // columns
-      const headers = [
-        'id','name','spec','buyDate','warranty','price','user','dept','receipt','warrantyDoc'
-      ];
+      const headers = ['id','name','spec','buyDate','warranty','price','user','dept','receipt','warrantyDoc'];
       const rows = assets.map(a => headers.map(h => a[h] ?? ''));
       downloadCSV('assets.csv', headers, rows);
     }
@@ -1364,9 +1358,11 @@
       downloadCSV('staff.csv', headers, rows);
     }
 
+    // ✅ Excel 友善：加 UTF-8 BOM，Excel 直接不亂碼
     function downloadCSV(filename, headers, rows) {
       const csv = toCSV(headers, rows);
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -1377,80 +1373,115 @@
       URL.revokeObjectURL(url);
     }
 
-    function handleImportCSV(kind, file) {
+    // ✅ 匯入：用 ArrayBuffer 讀檔，偵測 UTF-8 / Big5(MS950)
+    async function handleImportCSV(kind, file) {
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const text = reader.result;
-          const { headers, rows } = parseCSV(text);
 
-          if (kind === 'staff') {
-            // expect id,name,title,dept,joinDate (order doesn't matter if headers match)
-            const required = ['id','name','dept'];
-            required.forEach(r => { if (!headers.includes(r)) throw new Error(`缺少欄位：${r}`); });
+      try {
+        const buf = await file.arrayBuffer();
+        const text = decodeCsvBestEffort(buf);
 
-            const imported = rows
-              .filter(r => normalize(r[headers.indexOf('id')]))
-              .map(r => ({
-                id: normalize(r[headers.indexOf('id')]),
-                name: normalize(r[headers.indexOf('name')]),
-                title: headers.includes('title') ? normalize(r[headers.indexOf('title')]) : '',
-                dept: normalize(r[headers.indexOf('dept')]),
-                joinDate: headers.includes('joinDate') ? normalize(r[headers.indexOf('joinDate')]) : ''
-              }));
+        const { headers, rows } = parseCSV(text);
 
-            // merge by id (upsert)
-            const map = new Map(staff.map(s => [s.id, s]));
-            imported.forEach(s => map.set(s.id, s));
-            staff = Array.from(map.values());
+        if (kind === 'staff') {
+          const required = ['id','name','dept'];
+          required.forEach(r => { if (!headers.includes(r)) throw new Error(`缺少欄位：${r}`); });
 
-            // 同步：若某員工姓名/部門變動，資產依姓名無法安全更新（因 CSV 可能改名）
-            // => 這裡不自動改資產，避免錯誤；若需同步，請在 UI 內改名（已提供自動連動）
-            save();
-            alert(`已匯入員工 ${imported.length} 筆（以員工編號合併更新）`);
-          } else {
-            const required = ['id','name'];
-            required.forEach(r => { if (!headers.includes(r)) throw new Error(`缺少欄位：${r}`); });
+          const imported = rows
+            .filter(r => normalize(r[headers.indexOf('id')]))
+            .map(r => ({
+              id: normalize(r[headers.indexOf('id')]),
+              name: normalize(r[headers.indexOf('name')]),
+              title: headers.includes('title') ? normalize(r[headers.indexOf('title')]) : '',
+              dept: normalize(r[headers.indexOf('dept')]),
+              joinDate: headers.includes('joinDate') ? normalize(r[headers.indexOf('joinDate')]) : ''
+            }));
 
-            const imported = rows
-              .filter(r => normalize(r[headers.indexOf('id')]))
-              .map(r => {
-                const obj = {};
-                headers.forEach((h, idx) => obj[h] = normalize(r[idx] ?? ''));
-                // ensure required
-                obj.id = normalize(obj.id);
-                obj.name = normalize(obj.name);
-                // dept auto from staff if user exists
-                if (obj.user) {
-                  const st = getStaffByName(obj.user);
-                  obj.dept = st ? st.dept : (obj.dept || '');
-                }
-                // keep optional history/repairs empty on import (can be extended)
-                obj.history = [];
-                obj.repairs = [];
-                return obj;
-              });
+          const map = new Map(staff.map(s => [s.id, s]));
+          imported.forEach(s => map.set(s.id, s));
+          staff = Array.from(map.values());
 
-            // upsert by id
-            const map = new Map(assets.map(a => [a.id, a]));
-            imported.forEach(a => map.set(a.id, a));
-            assets = Array.from(map.values());
+          save();
+          alert(`已匯入員工 ${imported.length} 筆（以員工編號合併更新）`);
+        } else {
+          const required = ['id','name'];
+          required.forEach(r => { if (!headers.includes(r)) throw new Error(`缺少欄位：${r}`); });
 
-            save();
-            alert(`已匯入資產 ${imported.length} 筆（以資產編號合併更新）`);
-          }
+          const imported = rows
+            .filter(r => normalize(r[headers.indexOf('id')]))
+            .map(r => {
+              const obj = {};
+              headers.forEach((h, idx) => obj[h] = normalize(r[idx] ?? ''));
+              obj.id = normalize(obj.id);
+              obj.name = normalize(obj.name);
 
-        } catch (err) {
-          console.error(err);
-          alert(`匯入失敗：${err.message || err}`);
-        } finally {
-          // reset input
-          const input = document.getElementById(kind === 'staff' ? 'import-staff' : 'import-assets');
-          input.value = '';
+              if (obj.user) {
+                const st = getStaffByName(obj.user);
+                obj.dept = st ? st.dept : (obj.dept || '');
+              }
+              obj.history = [];
+              obj.repairs = [];
+              return obj;
+            });
+
+          const map = new Map(assets.map(a => [a.id, a]));
+          imported.forEach(a => map.set(a.id, a));
+          assets = Array.from(map.values());
+
+          save();
+          alert(`已匯入資產 ${imported.length} 筆（以資產編號合併更新）`);
         }
-      };
-      reader.readAsText(file, 'utf-8');
+
+      } catch (err) {
+        console.error(err);
+        alert(`匯入失敗：${err.message || err}`);
+      } finally {
+        const input = document.getElementById(kind === 'staff' ? 'import-staff' : 'import-assets');
+        if (input) input.value = '';
+      }
+    }
+
+    // 嘗試 UTF-8 -> 如果看起來亂碼/大量替換字元，再嘗試 Big5/MS950
+    function decodeCsvBestEffort(arrayBuffer) {
+      // 去 BOM + UTF-8
+      const utf8 = decodeWith('utf-8', arrayBuffer);
+      const cleanedUtf8 = stripBom(utf8);
+      if (!looksGarbled(cleanedUtf8)) return cleanedUtf8;
+
+      // Big5 (常見：Excel 另存 CSV 會用 Big5/CP950)
+      // Chrome / Edge 通常支援 'big5'
+      try {
+        const big5 = decodeWith('big5', arrayBuffer);
+        const cleanedBig5 = stripBom(big5);
+        // 若 big5 也很糟，還是回 utf-8（至少不炸）
+        return looksGarbled(cleanedBig5) ? cleanedUtf8 : cleanedBig5;
+      } catch (_) {
+        return cleanedUtf8;
+      }
+    }
+
+    function decodeWith(encoding, arrayBuffer) {
+      const dec = new TextDecoder(encoding, { fatal: false });
+      return dec.decode(new Uint8Array(arrayBuffer));
+    }
+
+    function stripBom(text) {
+      if (!text) return text;
+      return text.replace(/^\uFEFF/, '');
+    }
+
+    // 判斷是否像亂碼：大量 � 或控制字元，或幾乎沒有中文但有很多怪符號
+    function looksGarbled(text) {
+      if (!text) return false;
+      const len = text.length;
+      if (len === 0) return false;
+
+      const replacementCount = (text.match(/\uFFFD/g) || []).length; // �
+      const controlCount = (text.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
+      const weirdCount = (text.match(/[�]/g) || []).length;
+
+      const ratio = (replacementCount + controlCount + weirdCount) / len;
+      return ratio > 0.01; // 1% 以上通常就很不對勁
     }
 
     function toCSV(headers, rows) {
@@ -1462,7 +1493,7 @@
       const lines = [];
       lines.push(headers.map(esc).join(','));
       rows.forEach(r => lines.push(r.map(esc).join(',')));
-      return lines.join('\n');
+      return lines.join('\r\n'); // Excel 更穩：CRLF
     }
 
     // Basic CSV parser (supports quotes)
@@ -1471,6 +1502,9 @@
       let row = [];
       let cur = '';
       let inQuotes = false;
+
+      // 統一換行（避免 \r\n / \n 混用造成問題）
+      text = (text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
       for (let i=0; i<text.length; i++) {
         const ch = text[i];
@@ -1487,14 +1521,12 @@
           if (ch === '"') inQuotes = true;
           else if (ch === ',') { row.push(cur); cur = ''; }
           else if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
-          else if (ch === '\r') { /* ignore */ }
           else { cur += ch; }
         }
       }
       row.push(cur);
       rows.push(row);
 
-      // trim empty last line
       while (rows.length && rows[rows.length-1].every(c => normalize(c) === '')) rows.pop();
 
       const headers = (rows.shift() || []).map(h => normalize(h));
@@ -1516,9 +1548,12 @@
     }
     function closeModal() {
       document.getElementById('modal-overlay').classList.add('hidden');
+      document.getElementById('modal-content').innerHTML = '';
     }
     function closePreview() {
       document.getElementById('preview-overlay').classList.add('hidden');
+      document.getElementById('preview-render').innerHTML = '';
+      document.getElementById('print-area').innerHTML = '';
     }
 
     /*****************************
@@ -1540,7 +1575,6 @@
      * Init
      *****************************/
     window.onload = () => {
-      // Default labels
       document.getElementById('assets-dept-filter-label').textContent = assetsDeptFilter;
       document.getElementById('staff-dept-filter-label').textContent  = staffDeptFilter;
       render();
